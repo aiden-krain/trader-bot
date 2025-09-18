@@ -1,6 +1,7 @@
 """
 Production Accounts MCP Server - Provides real trading capabilities via Model Context Protocol.
 This replaces the simulated accounts_server.py with real Alpaca trading integration.
+Now supports trader-specific API credentials for separate account management.
 """
 
 import sys
@@ -8,14 +9,12 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
-from core.alpaca_client import get_account_info, get_positions, get_orders, place_order, get_share_price
+from core.production_accounts import ProductionAccount
 from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 import os
 import json
-
-load_dotenv()
 
 load_dotenv()
 
@@ -25,10 +24,19 @@ mcp = FastMCP("Production Trading Accounts")
 paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
 execute_real_orders = os.getenv("EXECUTE_REAL_ORDERS", "false").lower() == "true"
 
+# Cache for trader accounts to avoid recreating them
+_trader_accounts = {}
+
+def get_trader_account(name: str) -> ProductionAccount:
+    """Get or create a trader-specific ProductionAccount instance"""
+    if name not in _trader_accounts:
+        _trader_accounts[name] = ProductionAccount(name, paper_trading=paper_trading)
+    return _trader_accounts[name]
+
 @mcp.tool()
 async def buy_shares(name: str, symbol: str, quantity: int, rationale: str) -> str:
     """
-    Execute buy order through Alpaca with risk management.
+    Execute buy order through Alpaca with risk management using trader-specific account.
     
     Args:
         name: Trader account name
@@ -40,27 +48,13 @@ async def buy_shares(name: str, symbol: str, quantity: int, rationale: str) -> s
         String with order result and updated portfolio status
     """
     try:
-        # Validate order before placing
-        account_data = get_account_info()
-        current_price = get_share_price(symbol.upper())
-        total_cost = current_price * quantity
+        # Get trader-specific account
+        account = get_trader_account(name)
         
-        if total_cost > float(account_data['buying_power']):
-            return f"❌ Insufficient buying power. Need ${total_cost:,.2f}, have ${float(account_data['buying_power']):,.2f}"
+        # Execute buy order through trader's specific account
+        result = account.buy_shares(symbol.upper(), quantity, rationale)
         
-        # Place order through Alpaca
-        order_result = place_order(
-            symbol=symbol.upper(),
-            qty=quantity,
-            side='buy',
-            order_type='market'
-        )
-        
-        write_log(name, "trade", f"Buy {quantity} {symbol.upper()}: {rationale}")
-        
-        # Get updated account info
-        updated_account = get_account_info()
-        return f"✅ Buy order executed: {quantity} shares of {symbol.upper()} at ~${current_price:.2f}\nUpdated portfolio value: ${float(updated_account['portfolio_value']):,.2f}"
+        return result
         
     except Exception as e:
         error_msg = f"❌ Buy order system error: {str(e)}"
@@ -70,7 +64,7 @@ async def buy_shares(name: str, symbol: str, quantity: int, rationale: str) -> s
 @mcp.tool()
 async def sell_shares(name: str, symbol: str, quantity: int, rationale: str) -> str:
     """
-    Execute sell order through Alpaca with risk management.
+    Execute sell order through Alpaca with risk management using trader-specific account.
     
     Args:
         name: Trader account name
@@ -82,31 +76,13 @@ async def sell_shares(name: str, symbol: str, quantity: int, rationale: str) -> 
         String with order result and updated portfolio status
     """
     try:
-        # Check current position
-        positions = get_positions()
-        current_position = 0
-        for pos in positions:
-            if pos['symbol'] == symbol.upper():
-                current_position = pos['qty']
-                break
+        # Get trader-specific account
+        account = get_trader_account(name)
         
-        if current_position < quantity:
-            return f"❌ Cannot sell {quantity} shares of {symbol.upper()}. Current position: {current_position}"
+        # Execute sell order through trader's specific account
+        result = account.sell_shares(symbol.upper(), quantity, rationale)
         
-        # Place sell order through Alpaca
-        order_result = place_order(
-            symbol=symbol.upper(),
-            qty=quantity,
-            side='sell',
-            order_type='market'
-        )
-        
-        current_price = get_share_price(symbol.upper())
-        write_log(name, "trade", f"Sell {quantity} {symbol.upper()}: {rationale}")
-        
-        # Get updated account info
-        updated_account = get_account_info()
-        return f"✅ Sell order executed: {quantity} shares of {symbol.upper()} at ~${current_price:.2f}\nUpdated portfolio value: ${float(updated_account['portfolio_value']):,.2f}"
+        return result
         
     except Exception as e:
         error_msg = f"❌ Sell order system error: {str(e)}"
@@ -116,7 +92,7 @@ async def sell_shares(name: str, symbol: str, quantity: int, rationale: str) -> 
 @mcp.tool()
 async def get_account_info(name: str) -> str:
     """
-    Get comprehensive account information and portfolio status.
+    Get comprehensive account information and portfolio status using trader-specific account.
     
     Args:
         name: Trader account name
@@ -125,9 +101,13 @@ async def get_account_info(name: str) -> str:
         Detailed account report with real-time data
     """
     try:
-        account_data = get_account_info()
-        positions = get_positions()
-        recent_orders = get_orders(limit=10)
+        # Get trader-specific account
+        account = get_trader_account(name)
+        
+        # Get account info from trader's specific Alpaca connection
+        account_data = account.alpaca.get_account_info()
+        positions = account.alpaca.get_positions()
+        recent_orders = account.alpaca.get_orders(limit=10)
         
         result = {
             "account_name": name,
@@ -141,7 +121,7 @@ async def get_account_info(name: str) -> str:
             "execute_real_orders": execute_real_orders
         }
         
-        write_log(name, "account", "Retrieved account details from Alpaca")
+        write_log(name, "account", "Retrieved account details from trader-specific Alpaca connection")
         return json.dumps(result, indent=2)
         
     except Exception as e:
@@ -150,8 +130,7 @@ async def get_account_info(name: str) -> str:
 @mcp.tool()
 async def sync_account_with_broker(name: str) -> str:
     """
-    Synchronize account state with Alpaca broker account.
-    This is now automatic since we're using Alpaca API directly.
+    Synchronize account state with Alpaca broker account using trader-specific connection.
     
     Args:
         name: Trader account name
@@ -160,10 +139,10 @@ async def sync_account_with_broker(name: str) -> str:
         String with sync result status
     """
     try:
-        # Since we're using Alpaca API directly, data is always synced
-        account_data = get_account_info()
-        write_log(name, "sync", "Account synced with Alpaca")
-        return f"✅ Account {name} is automatically synced with Alpaca. Portfolio value: ${float(account_data['portfolio_value']):,.2f}"
+        # Get trader-specific account and sync
+        account = get_trader_account(name)
+        result = account.sync_with_alpaca()
+        return result
     
     except Exception as e:
         error_msg = f"❌ Sync check failed: {str(e)}"
@@ -173,7 +152,7 @@ async def sync_account_with_broker(name: str) -> str:
 @mcp.tool()
 async def get_portfolio_summary(name: str) -> Dict[str, Any]:
     """
-    Get structured portfolio data for programmatic use.
+    Get structured portfolio data for programmatic use using trader-specific account.
     
     Args:
         name: Trader account name
@@ -182,8 +161,12 @@ async def get_portfolio_summary(name: str) -> Dict[str, Any]:
         Dictionary with portfolio metrics and holdings
     """
     try:
-        account_data = get_account_info()
-        positions = get_positions()
+        # Get trader-specific account
+        account = get_trader_account(name)
+        
+        # Get data from trader's specific Alpaca connection
+        account_data = account.alpaca.get_account_info()
+        positions = account.alpaca.get_positions()
         
         # Calculate holdings dictionary
         holdings = {}
@@ -209,7 +192,7 @@ async def get_portfolio_summary(name: str) -> Dict[str, Any]:
 @mcp.tool()
 async def get_recent_transactions(name: str, limit: int = 10) -> List[Dict[str, Any]]:
     """
-    Get recent trading transactions for analysis.
+    Get recent trading transactions for analysis using trader-specific account.
     
     Args:
         name: Trader account name
@@ -219,7 +202,11 @@ async def get_recent_transactions(name: str, limit: int = 10) -> List[Dict[str, 
         List of recent transaction dictionaries
     """
     try:
-        orders = get_orders(status="filled", limit=limit)
+        # Get trader-specific account
+        account = get_trader_account(name)
+        
+        # Get orders from trader's specific Alpaca connection
+        orders = account.alpaca.get_orders(status="filled", limit=limit)
         
         return [
             {
@@ -241,7 +228,7 @@ async def get_recent_transactions(name: str, limit: int = 10) -> List[Dict[str, 
 @mcp.tool()
 async def get_strategy(name: str) -> str:
     """
-    Get current investment strategy for the account.
+    Get current investment strategy for the account using trader-specific account.
     
     Args:
         name: Trader account name
@@ -250,9 +237,11 @@ async def get_strategy(name: str) -> str:
         Current investment strategy description
     """
     try:
-        # Since we're using direct Alpaca integration, strategy is managed separately
-        write_log(name, "strategy", "Retrieved default strategy")
-        return "Alpaca Paper Trading - Direct API Integration"
+        # Get trader-specific account
+        account = get_trader_account(name)
+        strategy = account.get_strategy()
+        write_log(name, "strategy", "Retrieved strategy from trader-specific account")
+        return strategy
     
     except Exception as e:
         return f"❌ Error getting strategy: {str(e)}"
@@ -260,7 +249,7 @@ async def get_strategy(name: str) -> str:
 @mcp.tool()
 async def change_strategy(name: str, strategy: str) -> str:
     """
-    Update investment strategy for the account.
+    Update investment strategy for the account using trader-specific account.
     
     Args:
         name: Trader account name
@@ -270,9 +259,10 @@ async def change_strategy(name: str, strategy: str) -> str:
         Confirmation of strategy update
     """
     try:
-        # Log strategy change
-        write_log(name, "strategy", f"Strategy updated: {strategy}")
-        return f"✅ Strategy updated for {name}: {strategy}"
+        # Get trader-specific account
+        account = get_trader_account(name)
+        result = account.change_strategy(strategy)
+        return result
     
     except Exception as e:
         return f"❌ Error changing strategy: {str(e)}"
@@ -280,7 +270,7 @@ async def change_strategy(name: str, strategy: str) -> str:
 @mcp.tool()
 async def get_position_details(name: str, symbol: str) -> Dict[str, Any]:
     """
-    Get detailed information about a specific position.
+    Get detailed information about a specific position using trader-specific account.
     
     Args:
         name: Trader account name
@@ -290,8 +280,11 @@ async def get_position_details(name: str, symbol: str) -> Dict[str, Any]:
         Dictionary with position details and current market data
     """
     try:
+        # Get trader-specific account
+        account = get_trader_account(name)
+        
         symbol = symbol.upper()
-        positions = get_positions()
+        positions = account.alpaca.get_positions()
         
         # Find the position
         position = None
@@ -303,7 +296,7 @@ async def get_position_details(name: str, symbol: str) -> Dict[str, Any]:
         if not position or position['qty'] == 0:
             return {"symbol": symbol, "quantity": 0, "message": "No position in this symbol"}
         
-        current_price = get_share_price(symbol)
+        current_price = account.get_real_price(symbol)
         
         return {
             "symbol": symbol,

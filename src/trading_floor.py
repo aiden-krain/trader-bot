@@ -9,8 +9,8 @@ import os
 
 load_dotenv(override=True)
 
-# Initialize Alpaca client for market status
-alpaca_client = AlpacaClient(paper_trading=True)
+# Initialize default Alpaca client for market status (uses Warren's credentials as default)
+alpaca_client = AlpacaClient(paper_trading=True, trader_name="Warren")
 
 RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
 RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
@@ -18,8 +18,8 @@ RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
 )
 
 # Trader personalities and names
-names = ["Warren", "George", "Ray", "Cathie"]
-lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
+names = ["Warren", "Ray", "Cathie"]
+lastnames = ["Patience", "Systematic", "Crypto"]
 
 # Simplified model selection: OpenAI and Anthropic only
 DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", "openai").lower()
@@ -29,19 +29,18 @@ if USE_MIXED_MODELS:
     # Mix of OpenAI and Anthropic models for diversity
     model_names = [
         "gpt-4o-mini",
-        "claude-3-5-haiku-20241022", 
         "gpt-4o",
         "claude-3-5-sonnet-20241022"
     ]
-    short_model_names = ["GPT 4o Mini", "Claude 3.5 Haiku", "GPT 4o", "Claude 3.5 Sonnet"]
+    short_model_names = ["GPT 4o Mini", "GPT 4o", "Claude 3.5 Sonnet"]
 else:
     # Single provider mode
     if DEFAULT_MODEL_PROVIDER == "anthropic":
-        model_names = ["claude-3-5-haiku-20241022"] * 4
-        short_model_names = ["Claude 3.5 Haiku"] * 4
+        model_names = ["claude-3-5-haiku-20241022"] * 3
+        short_model_names = ["Claude 3.5 Haiku"] * 3
     else:
-        model_names = ["gpt-4o-mini"] * 4
-        short_model_names = ["GPT 4o Mini"] * 4
+        model_names = ["gpt-4o-mini"] * 3
+        short_model_names = ["GPT 4o Mini"] * 3
 
 
 def create_traders() -> List[Trader]:

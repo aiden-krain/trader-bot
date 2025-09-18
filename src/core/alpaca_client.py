@@ -16,33 +16,75 @@ class AlpacaClient:
     """
     Production-ready Alpaca client for market data and trading.
     Handles both paper and live trading environments.
+    Supports trader-specific API credentials.
     """
     
-    def __init__(self, paper_trading: bool = True):
+    def __init__(self, paper_trading: bool = True, trader_name: str = None):
         self.paper_trading = paper_trading
+        self.trader_name = trader_name
         
         # Use environment-configured base URL
         base_url = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets').replace('/v2', '')
         data_url = "https://data.alpaca.markets"
         
+        # Get trader-specific API credentials
+        api_key, secret_key = self._get_trader_credentials(trader_name)
+        
         # Initialize trading API
         self.api = tradeapi.REST(
-            key_id=os.getenv("ALPACA_KEY"),
-            secret_key=os.getenv("ALPACA_SECRET"),
+            key_id=api_key,
+            secret_key=secret_key,
             base_url=base_url,
             api_version='v2'
         )
         
         # Initialize data API
         self.data_api = tradeapi.REST(
-            key_id=os.getenv("ALPACA_KEY"),
-            secret_key=os.getenv("ALPACA_SECRET"),
+            key_id=api_key,
+            secret_key=secret_key,
             base_url=data_url,
             api_version='v2'
         )
         
         # Verify connection on initialization
         self._verify_connection()
+    
+    def _get_trader_credentials(self, trader_name: str = None) -> tuple[str, str]:
+        """
+        Get API credentials for a specific trader.
+        Falls back to generic credentials if trader-specific ones aren't found.
+        """
+        print(f"🔍 Retrieving Alpaca API credentials for {trader_name}")
+        
+        # Initialize variables
+        api_key = None
+        secret_key = None
+        
+        if trader_name:
+            # Try trader-specific credentials first
+            trader_key = f"{trader_name.upper()}_ALPACA_KEY"
+            trader_secret = f"{trader_name.upper()}_ALPACA_SECRET"
+            
+            api_key = os.getenv(trader_key)
+            secret_key = os.getenv(trader_secret)
+            
+            if api_key and secret_key:
+                print(f"🔑 Using trader-specific credentials for {trader_name}")
+                return api_key, secret_key
+            else:
+                print(f"⚠️  Trader-specific credentials not found for {trader_name}, falling back to generic")
+        
+        # Fall back to generic credentials
+        if not api_key or not secret_key:
+            api_key = os.getenv("ALPACA_KEY")
+            secret_key = os.getenv("ALPACA_SECRET")
+            
+            if api_key and secret_key:
+                print("🔑 Using generic Alpaca credentials")
+                return api_key, secret_key
+        
+        # If we still don't have credentials, raise an error
+        raise ValueError("No Alpaca API credentials found. Please set ALPACA_KEY and ALPACA_SECRET environment variables.")
     
     def _verify_connection(self):
         """Verify API connection and log account status"""
@@ -291,8 +333,13 @@ class AlpacaClient:
             return {"symbol": symbol, "error": str(e)}
 
 # Global instance for use across the application
-# Initialize with paper trading by default for safety
-alpaca_client = AlpacaClient(paper_trading=True)
+# Initialize with paper trading by default for safety, using Warren's credentials as fallback
+try:
+    alpaca_client = AlpacaClient(paper_trading=True, trader_name="Warren")
+except Exception:
+    # If Warren's credentials fail, try without trader name (will fail gracefully)
+    alpaca_client = None
+    print("⚠️  Warning: Could not initialize global alpaca_client. Trader-specific clients will still work.")
 
 # Backward compatibility function to replace market.py functionality
 def get_share_price(symbol: str) -> float:
@@ -300,32 +347,56 @@ def get_share_price(symbol: str) -> float:
     Backward compatibility function that replaces market.py's get_share_price()
     with real Alpaca data.
     """
-    return alpaca_client.get_real_price(symbol)
+    if alpaca_client:
+        return alpaca_client.get_real_price(symbol)
+    else:
+        # Fallback to test prices if no client available
+        test_prices = {
+            "AAPL": 175.50, "TSLA": 245.30, "GOOGL": 142.20, "MSFT": 415.80,
+            "AMZN": 185.70, "NVDA": 128.45, "META": 512.30, "SPY": 565.40,
+            "QQQ": 485.20, "IWM": 224.60
+        }
+        return test_prices.get(symbol.upper(), 100.0)
 
 def is_market_open() -> bool:
     """
     Backward compatibility function that replaces market.py's is_market_open()
     with real Alpaca market status.
     """
-    status = alpaca_client.get_market_status()
-    return status.get("is_open", False)
+    if alpaca_client:
+        status = alpaca_client.get_market_status()
+        return status.get("is_open", False)
+    else:
+        return True  # Assume market is open if no client available
 
 # Additional functions needed by servers and UI
 def get_account_info():
     """Get account info directly from Alpaca API"""
-    return alpaca_client.get_account_info()
+    if alpaca_client:
+        return alpaca_client.get_account_info()
+    else:
+        return {"error": "No global alpaca client available"}
 
 def get_positions():
     """Get positions directly from Alpaca API"""
-    return alpaca_client.get_positions()
+    if alpaca_client:
+        return alpaca_client.get_positions()
+    else:
+        return []
 
 def get_orders(status="all", limit=50):
     """Get orders directly from Alpaca API"""
-    return alpaca_client.get_orders(status=status, limit=limit)
+    if alpaca_client:
+        return alpaca_client.get_orders(status=status, limit=limit)
+    else:
+        return []
 
 def place_order(symbol: str, qty: int, side: str, order_type: str = "market", time_in_force: str = "gtc"):
     """Place order directly through Alpaca API"""
-    return alpaca_client.place_market_order(symbol, qty, side, time_in_force)
+    if alpaca_client:
+        return alpaca_client.place_market_order(symbol, qty, side, time_in_force)
+    else:
+        return {"success": False, "error": "No global alpaca client available"}
 
 if __name__ == "__main__":
     # Test the client

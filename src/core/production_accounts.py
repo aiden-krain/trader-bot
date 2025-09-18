@@ -7,7 +7,6 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from accounts import Account, Transaction
 from core.alpaca_client import AlpacaClient
 from utils.database import write_account, read_account, write_log
 from datetime import datetime
@@ -17,6 +16,15 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+class Transaction:
+    """Simple transaction record for trading operations"""
+    def __init__(self, symbol: str, quantity: int, price: float, timestamp: str, rationale: str):
+        self.symbol = symbol
+        self.quantity = quantity
+        self.price = price
+        self.timestamp = timestamp
+        self.rationale = rationale
 
 class ProductionAccount:
     """
@@ -35,7 +43,7 @@ class ProductionAccount:
         
         # Production-specific attributes
         self.paper_trading = paper_trading
-        self.alpaca = AlpacaClient(paper_trading)
+        self.alpaca = AlpacaClient(paper_trading, trader_name=name)
         self.last_sync_time = None
         self.risk_limits = self._load_risk_limits()
         

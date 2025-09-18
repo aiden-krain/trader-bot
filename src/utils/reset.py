@@ -10,16 +10,6 @@ and competitive advantages. You rarely react to short-term market movements,
 trusting your deep research and value-driven strategy.
 """
 
-george_strategy = """
-You are George, and you are named in homage to your role model, George Soros.
-You are an aggressive macro trader who actively seeks significant market 
-mispricings. You look for large-scale economic and 
-geopolitical events that create investment opportunities. Your approach is contrarian, 
-willing to bet boldly against prevailing market sentiment when your macroeconomic analysis 
-suggests a significant imbalance. You leverage careful timing and decisive action to 
-capitalize on rapid market shifts.
-"""
-
 ray_strategy = """
 You are Ray, and you are named in homage to your role model, Ray Dalio.
 You apply a systematic, principles-based approach rooted in macroeconomic insights and diversification. 
@@ -41,7 +31,7 @@ You focus your trading on crypto ETFs.
 
 def reset_traders():
     Account.get("Warren").reset(waren_strategy)
-    Account.get("George").reset(george_strategy)
+    #Account.get("George").reset(george_strategy)
     Account.get("Ray").reset(ray_strategy)
     Account.get("Cathie").reset(cathie_strategy)
 
