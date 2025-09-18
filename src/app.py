@@ -3,8 +3,10 @@ from utils.util import css, js, Color
 import pandas as pd
 from trading_floor import names, lastnames, short_model_names
 import plotly.express as px
-from accounts import Account
+from core.alpaca_client import get_account_info, get_positions, get_orders, get_share_price
 from utils.database import read_log
+import json
+from datetime import datetime
 
 mapper = {
     "trace": Color.WHITE,
@@ -21,19 +23,39 @@ class Trader:
         self.name = name
         self.lastname = lastname
         self.model_name = model_name
-        self.account = Account.get(name)
+        self.account_data = None
+        self.positions = []
+        self.reload()
 
     def reload(self):
-        self.account = Account.get(self.name)
+        """Refresh account data from Alpaca API"""
+        try:
+            self.account_data = get_account_info()
+            self.positions = get_positions()
+        except Exception as e:
+            print(f"Error loading account data for {self.name}: {e}")
+            self.account_data = {"portfolio_value": 0, "cash": 0}
+            self.positions = []
 
     def get_title(self) -> str:
         return f"<div style='text-align: center;font-size:34px;'>{self.name}<span style='color:#ccc;font-size:24px;'> ({self.model_name}) - {self.lastname}</span></div>"
 
     def get_strategy(self) -> str:
-        return self.account.get_strategy()
+        return "Alpaca Paper Trading - Direct API Integration"
 
     def get_portfolio_value_df(self) -> pd.DataFrame:
-        df = pd.DataFrame(self.account.portfolio_value_time_series, columns=["datetime", "value"])
+        """Create a simple time series with current portfolio value"""
+        # For now, create a simple chart with current value
+        # In a full implementation, you'd store historical data
+        current_time = datetime.now()
+        portfolio_value = float(self.account_data.get('portfolio_value', 0))
+        
+        # Create a simple chart with some recent data points
+        data = [
+            [current_time.strftime("%Y-%m-%d %H:%M:%S"), portfolio_value]
+        ]
+        
+        df = pd.DataFrame(data, columns=["datetime", "value"])
         df["datetime"] = pd.to_datetime(df["datetime"])
         return df
 
@@ -55,30 +77,61 @@ class Trader:
 
     def get_holdings_df(self) -> pd.DataFrame:
         """Convert holdings to DataFrame for display"""
-        holdings = self.account.get_holdings()
-        if not holdings:
-            return pd.DataFrame(columns=["Symbol", "Quantity"])
+        if not self.positions:
+            return pd.DataFrame(columns=["Symbol", "Quantity", "Market Value", "Unrealized P&L"])
 
-        df = pd.DataFrame(
-            [{"Symbol": symbol, "Quantity": quantity} for symbol, quantity in holdings.items()]
-        )
-        return df
+        holdings_data = []
+        for pos in self.positions:
+            if pos['qty'] != 0:  # Only show non-zero positions
+                holdings_data.append({
+                    "Symbol": pos['symbol'],
+                    "Quantity": pos['qty'],
+                    "Market Value": f"${pos['market_value']:,.2f}",
+                    "Unrealized P&L": f"${pos['unrealized_pl']:,.2f}"
+                })
+        
+        if not holdings_data:
+            return pd.DataFrame(columns=["Symbol", "Quantity", "Market Value", "Unrealized P&L"])
+        
+        return pd.DataFrame(holdings_data)
 
     def get_transactions_df(self) -> pd.DataFrame:
-        """Convert transactions to DataFrame for display"""
-        transactions = self.account.list_transactions()
-        if not transactions:
-            return pd.DataFrame(columns=["Timestamp", "Symbol", "Quantity", "Price", "Rationale"])
+        """Convert recent orders to DataFrame for display"""
+        try:
+            orders = get_orders(status="filled", limit=10)
+            if not orders:
+                return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
 
-        return pd.DataFrame(transactions)
+            transactions_data = []
+            for order in orders:
+                transactions_data.append({
+                    "Timestamp": order.get("filled_at", order.get("submitted_at", ""))[:19],  # Trim to date/time
+                    "Symbol": order["symbol"],
+                    "Side": order["side"].upper(),
+                    "Quantity": order.get("filled_qty", order["qty"]),
+                    "Avg Price": f"${order.get('avg_fill_price', 0):.2f}" if order.get('avg_fill_price') else "N/A"
+                })
+            
+            return pd.DataFrame(transactions_data)
+        except Exception as e:
+            print(f"Error getting transactions: {e}")
+            return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
 
     def get_portfolio_value(self) -> str:
-        """Calculate total portfolio value based on current prices"""
-        portfolio_value = self.account.calculate_portfolio_value() or 0.0
-        pnl = self.account.calculate_profit_loss(portfolio_value) or 0.0
-        color = "green" if pnl >= 0 else "red"
-        emoji = "⬆" if pnl >= 0 else "⬇"
-        return f"<div style='text-align: center;background-color:{color};'><span style='font-size:32px'>${portfolio_value:,.0f}</span><span style='font-size:24px'>&nbsp;&nbsp;&nbsp;{emoji}&nbsp;${pnl:,.0f}</span></div>"
+        """Get portfolio value from Alpaca account data"""
+        if not self.account_data:
+            return "<div style='text-align: center;background-color:gray;'><span style='font-size:32px'>$0</span></div>"
+        
+        portfolio_value = float(self.account_data.get('portfolio_value', 0))
+        equity = float(self.account_data.get('equity', 0))
+        last_equity = float(self.account_data.get('last_equity', equity))
+        
+        # Calculate daily P&L
+        daily_pnl = equity - last_equity
+        color = "green" if daily_pnl >= 0 else "red"
+        emoji = "⬆" if daily_pnl >= 0 else "⬇"
+        
+        return f"<div style='text-align: center;background-color:{color};padding:10px;'><span style='font-size:32px'>${portfolio_value:,.0f}</span><span style='font-size:24px'>&nbsp;&nbsp;&nbsp;{emoji}&nbsp;${daily_pnl:,.0f}</span></div>"
 
     def get_logs(self, previous=None) -> str:
         logs = read_log(self.name, last_n=13)
@@ -115,18 +168,18 @@ class TraderView:
             with gr.Row():
                 self.holdings_table = gr.Dataframe(
                     value=self.trader.get_holdings_df,
-                    label="Holdings",
-                    headers=["Symbol", "Quantity"],
+                    label="Current Positions (Live from Alpaca)",
+                    headers=["Symbol", "Quantity", "Market Value", "Unrealized P&L"],
                     row_count=(5, "dynamic"),
-                    col_count=2,
+                    col_count=4,
                     max_height=300,
                     elem_classes=["dataframe-fix-small"],
                 )
             with gr.Row():
                 self.transactions_table = gr.Dataframe(
                     value=self.trader.get_transactions_df,
-                    label="Recent Transactions",
-                    headers=["Timestamp", "Symbol", "Quantity", "Price", "Rationale"],
+                    label="Recent Orders (Live from Alpaca)",
+                    headers=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"],
                     row_count=(5, "dynamic"),
                     col_count=5,
                     max_height=300,

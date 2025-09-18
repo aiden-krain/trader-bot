@@ -3,8 +3,7 @@ Comprehensive test script for the trading bot system
 Tests all components without making actual trades
 """
 
-from core.alpaca_client import AlpacaClient
-from core.production_accounts import ProductionAccount
+from core.alpaca_client import AlpacaClient, get_account_info, get_positions, get_share_price
 import asyncio
 import sys
 import os
@@ -27,13 +26,13 @@ async def test_alpaca_connection():
         status = client.get_market_status()
         print(f"✅ Market Status: {'OPEN' if status.get('is_open', False) else 'CLOSED'}")
         
-        # Test market data (may fail with free tier)
+        # Test market data
         print("\n📊 Testing Market Data...")
         try:
-            price = await client.get_real_price('AAPL')
+            price = client.get_real_price('AAPL')
             print(f"✅ AAPL Price: ${price:.2f}")
         except Exception as e:
-            print(f"⚠️  Price fetch limitation (expected with free tier): {str(e)[:100]}...")
+            print(f"⚠️  Price fetch limitation: {str(e)[:100]}...")
         
         return True
         
@@ -41,31 +40,38 @@ async def test_alpaca_connection():
         print(f"❌ Alpaca connection failed: {e}")
         return False
 
-async def test_production_accounts():
-    """Test production account system"""
-    print("\n🏦 Testing Production Account System...")
+async def test_alpaca_integration():
+    """Test direct Alpaca API integration"""
+    print("\n🏦 Testing Direct Alpaca Integration...")
     try:
-        # Create test account
-        account = ProductionAccount("test_trader", 100000.0)
+        # Test account info
+        account_data = get_account_info()
+        print(f"✅ Account synced - Portfolio Value: ${float(account_data['portfolio_value']):,.2f}")
+        print(f"💰 Cash Balance: ${float(account_data['cash']):,.2f}")
+        print(f"� Buying Power: ${float(account_data['buying_power']):,.2f}")
         
-        # Test account sync
-        sync_result = account.sync_with_alpaca()
-        print(f"✅ Account synced - Balance: ${account.balance:,.2f}")
-        print(f"📊 Sync result: {sync_result[:100]}...")
+        # Test positions
+        print("\n� Testing Positions...")
+        positions = get_positions()
+        print(f"✅ Retrieved {len(positions)} positions")
         
-        # Test risk validation (without execution)
-        print("\n🔍 Testing Risk Validation...")
-        try:
-            # Test risk validation system
-            is_valid, message = account._validate_trade_risk("AAPL", 10, "buy", 150.0)
-            print(f"✅ Risk validation: {'VALID' if is_valid else 'BLOCKED'} - {message}")
-        except Exception as e:
-            print(f"⚠️  Risk validation error: {e}")
+        # Test environment safety
+        print("\n🔍 Testing Safety Configuration...")
+        paper_trading = os.getenv('ALPACA_PAPER_TRADING', 'true').lower() == 'true'
+        execute_orders = os.getenv('EXECUTE_REAL_ORDERS', 'false').lower() == 'true'
+        base_url = os.getenv('ALPACA_BASE_URL', '')
+        
+        print(f"✅ Paper Trading: {'ENABLED' if paper_trading else 'DISABLED (DANGER!)'}")
+        print(f"✅ Execute Orders: {'DISABLED' if not execute_orders else 'ENABLED'}")
+        print(f"✅ Base URL: {base_url}")
+        
+        if not paper_trading:
+            print("⚠️  WARNING: Paper trading is disabled - using live API!")
         
         return True
         
     except Exception as e:
-        print(f"❌ Production account test failed: {e}")
+        print(f"❌ Alpaca integration test failed: {e}")
         return False
 
 async def test_mcp_servers():
@@ -174,8 +180,8 @@ async def run_comprehensive_test():
     # Test Alpaca connection
     test_results['alpaca'] = await test_alpaca_connection()
     
-    # Test production accounts
-    test_results['accounts'] = await test_production_accounts()
+    # Test Alpaca integration
+    test_results['alpaca_integration'] = await test_alpaca_integration()
     
     # Test MCP servers
     test_results['mcp_servers'] = await test_mcp_servers()

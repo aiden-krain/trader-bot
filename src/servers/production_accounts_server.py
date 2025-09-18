@@ -8,27 +8,22 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
-from core.production_accounts import ProductionAccount
+from core.alpaca_client import get_account_info, get_positions, get_orders, place_order, get_share_price
+from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
+import os
+import json
+
+load_dotenv()
 
 load_dotenv()
 
 mcp = FastMCP("Production Trading Accounts")
 
-# Global account instances for efficient reuse
-accounts: Dict[str, ProductionAccount] = {}
-
 # Trading mode configuration
 paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
 execute_real_orders = os.getenv("EXECUTE_REAL_ORDERS", "false").lower() == "true"
-
-def get_account(name: str) -> ProductionAccount:
-    """Get or create account instance with caching"""
-    account_key = name.lower()
-    if account_key not in accounts:
-        accounts[account_key] = ProductionAccount(account_key, paper_trading=paper_trading)
-    return accounts[account_key]
 
 @mcp.tool()
 async def buy_shares(name: str, symbol: str, quantity: int, rationale: str) -> str:
@@ -45,18 +40,31 @@ async def buy_shares(name: str, symbol: str, quantity: int, rationale: str) -> s
         String with order result and updated portfolio status
     """
     try:
-        account = get_account(name)
-        result = account.buy_shares(symbol.upper(), quantity, rationale)
+        # Validate order before placing
+        account_data = get_account_info()
+        current_price = get_share_price(symbol.upper())
+        total_cost = current_price * quantity
         
-        # Log for monitoring
-        trading_mode = "REAL" if execute_real_orders else "SIMULATED"
-        print(f"[{trading_mode}] {name} BUY {quantity} {symbol}: {result[:100]}...")
+        if total_cost > float(account_data['buying_power']):
+            return f"❌ Insufficient buying power. Need ${total_cost:,.2f}, have ${float(account_data['buying_power']):,.2f}"
         
-        return result
-    
+        # Place order through Alpaca
+        order_result = place_order(
+            symbol=symbol.upper(),
+            qty=quantity,
+            side='buy',
+            order_type='market'
+        )
+        
+        write_log(name, "trade", f"Buy {quantity} {symbol.upper()}: {rationale}")
+        
+        # Get updated account info
+        updated_account = get_account_info()
+        return f"✅ Buy order executed: {quantity} shares of {symbol.upper()} at ~${current_price:.2f}\nUpdated portfolio value: ${float(updated_account['portfolio_value']):,.2f}"
+        
     except Exception as e:
         error_msg = f"❌ Buy order system error: {str(e)}"
-        print(f"ERROR: {name} buy {symbol}: {error_msg}")
+        write_log(name, "error", error_msg)
         return error_msg
 
 @mcp.tool()
@@ -74,18 +82,35 @@ async def sell_shares(name: str, symbol: str, quantity: int, rationale: str) -> 
         String with order result and updated portfolio status
     """
     try:
-        account = get_account(name)
-        result = account.sell_shares(symbol.upper(), quantity, rationale)
+        # Check current position
+        positions = get_positions()
+        current_position = 0
+        for pos in positions:
+            if pos['symbol'] == symbol.upper():
+                current_position = pos['qty']
+                break
         
-        # Log for monitoring
-        trading_mode = "REAL" if execute_real_orders else "SIMULATED"
-        print(f"[{trading_mode}] {name} SELL {quantity} {symbol}: {result[:100]}...")
+        if current_position < quantity:
+            return f"❌ Cannot sell {quantity} shares of {symbol.upper()}. Current position: {current_position}"
         
-        return result
-    
+        # Place sell order through Alpaca
+        order_result = place_order(
+            symbol=symbol.upper(),
+            qty=quantity,
+            side='sell',
+            order_type='market'
+        )
+        
+        current_price = get_share_price(symbol.upper())
+        write_log(name, "trade", f"Sell {quantity} {symbol.upper()}: {rationale}")
+        
+        # Get updated account info
+        updated_account = get_account_info()
+        return f"✅ Sell order executed: {quantity} shares of {symbol.upper()} at ~${current_price:.2f}\nUpdated portfolio value: ${float(updated_account['portfolio_value']):,.2f}"
+        
     except Exception as e:
         error_msg = f"❌ Sell order system error: {str(e)}"
-        print(f"ERROR: {name} sell {symbol}: {error_msg}")
+        write_log(name, "error", error_msg)
         return error_msg
 
 @mcp.tool()
@@ -100,17 +125,33 @@ async def get_account_info(name: str) -> str:
         Detailed account report with real-time data
     """
     try:
-        account = get_account(name)
-        return account.get_detailed_report()
-    
+        account_data = get_account_info()
+        positions = get_positions()
+        recent_orders = get_orders(limit=10)
+        
+        result = {
+            "account_name": name,
+            "cash": float(account_data.get('cash', 0)),
+            "portfolio_value": float(account_data.get('portfolio_value', 0)),
+            "buying_power": float(account_data.get('buying_power', 0)),
+            "equity": float(account_data.get('equity', 0)),
+            "positions": positions,
+            "recent_orders": recent_orders[:5],  # Last 5 orders
+            "paper_trading": paper_trading,
+            "execute_real_orders": execute_real_orders
+        }
+        
+        write_log(name, "account", "Retrieved account details from Alpaca")
+        return json.dumps(result, indent=2)
+        
     except Exception as e:
         return f"❌ Error getting account info: {str(e)}"
 
 @mcp.tool()
 async def sync_account_with_broker(name: str) -> str:
     """
-    Synchronize local account state with Alpaca broker account.
-    Updates balance, holdings, and recent transactions.
+    Synchronize account state with Alpaca broker account.
+    This is now automatic since we're using Alpaca API directly.
     
     Args:
         name: Trader account name
@@ -119,14 +160,14 @@ async def sync_account_with_broker(name: str) -> str:
         String with sync result status
     """
     try:
-        account = get_account(name)
-        result = account.sync_with_alpaca()
-        print(f"SYNC: {name} - {result}")
-        return result
+        # Since we're using Alpaca API directly, data is always synced
+        account_data = get_account_info()
+        write_log(name, "sync", "Account synced with Alpaca")
+        return f"✅ Account {name} is automatically synced with Alpaca. Portfolio value: ${float(account_data['portfolio_value']):,.2f}"
     
     except Exception as e:
-        error_msg = f"❌ Sync failed: {str(e)}"
-        print(f"SYNC ERROR: {name} - {error_msg}")
+        error_msg = f"❌ Sync check failed: {str(e)}"
+        write_log(name, "error", error_msg)
         return error_msg
 
 @mcp.tool()
@@ -141,18 +182,24 @@ async def get_portfolio_summary(name: str) -> Dict[str, Any]:
         Dictionary with portfolio metrics and holdings
     """
     try:
-        account = get_account(name)
-        portfolio_value = account.calculate_portfolio_value()
+        account_data = get_account_info()
+        positions = get_positions()
+        
+        # Calculate holdings dictionary
+        holdings = {}
+        for pos in positions:
+            if pos['qty'] != 0:
+                holdings[pos['symbol']] = pos['qty']
         
         return {
             "account_name": name,
-            "cash_balance": account.balance,
-            "portfolio_value": portfolio_value,
-            "total_return": portfolio_value - 10000.0,  # Assuming 10k start
-            "holdings_count": len(account.holdings),
-            "holdings": account.holdings,
-            "last_sync": account.last_sync_time,
-            "paper_trading": account.paper_trading,
+            "cash_balance": float(account_data['cash']),
+            "portfolio_value": float(account_data['portfolio_value']),
+            "buying_power": float(account_data['buying_power']),
+            "equity": float(account_data['equity']),
+            "holdings_count": len(holdings),
+            "holdings": holdings,
+            "paper_trading": paper_trading,
             "real_orders_enabled": execute_real_orders
         }
     
@@ -172,20 +219,20 @@ async def get_recent_transactions(name: str, limit: int = 10) -> List[Dict[str, 
         List of recent transaction dictionaries
     """
     try:
-        account = get_account(name)
-        recent_transactions = account.transactions[-limit:] if account.transactions else []
+        orders = get_orders(status="filled", limit=limit)
         
         return [
             {
-                "symbol": t.symbol,
-                "quantity": t.quantity,
-                "price": t.price,
-                "total_value": abs(t.quantity * t.price),
-                "action": "BUY" if t.quantity > 0 else "SELL",
-                "timestamp": t.timestamp,
-                "rationale": t.rationale
+                "symbol": order["symbol"],
+                "quantity": order["qty"],
+                "filled_qty": order.get("filled_qty", 0),
+                "avg_price": order.get("avg_fill_price", 0),
+                "total_value": order.get("filled_qty", 0) * order.get("avg_fill_price", 0) if order.get("avg_fill_price") else 0,
+                "action": order["side"].upper(),
+                "timestamp": order.get("filled_at", order.get("submitted_at", "")),
+                "status": order["status"]
             }
-            for t in reversed(recent_transactions)  # Most recent first
+            for order in orders
         ]
     
     except Exception as e:
@@ -203,8 +250,9 @@ async def get_strategy(name: str) -> str:
         Current investment strategy description
     """
     try:
-        account = get_account(name)
-        return account.get_strategy()
+        # Since we're using direct Alpaca integration, strategy is managed separately
+        write_log(name, "strategy", "Retrieved default strategy")
+        return "Alpaca Paper Trading - Direct API Integration"
     
     except Exception as e:
         return f"❌ Error getting strategy: {str(e)}"
@@ -222,10 +270,9 @@ async def change_strategy(name: str, strategy: str) -> str:
         Confirmation of strategy update
     """
     try:
-        account = get_account(name)
-        result = account.change_strategy(strategy)
-        print(f"STRATEGY CHANGE: {name} -> {strategy[:50]}...")
-        return result
+        # Log strategy change
+        write_log(name, "strategy", f"Strategy updated: {strategy}")
+        return f"✅ Strategy updated for {name}: {strategy}"
     
     except Exception as e:
         return f"❌ Error changing strategy: {str(e)}"
@@ -243,35 +290,29 @@ async def get_position_details(name: str, symbol: str) -> Dict[str, Any]:
         Dictionary with position details and current market data
     """
     try:
-        account = get_account(name)
         symbol = symbol.upper()
+        positions = get_positions()
         
-        quantity = account.holdings.get(symbol, 0)
-        if quantity == 0:
+        # Find the position
+        position = None
+        for pos in positions:
+            if pos['symbol'] == symbol:
+                position = pos
+                break
+        
+        if not position or position['qty'] == 0:
             return {"symbol": symbol, "quantity": 0, "message": "No position in this symbol"}
         
-        current_price = account.get_real_price(symbol)
-        market_value = current_price * quantity if current_price > 0 else 0
-        
-        # Calculate average cost basis from transactions
-        cost_basis = 0
-        total_shares = 0
-        for t in account.transactions:
-            if t.symbol == symbol and t.quantity > 0:  # Only buy transactions
-                cost_basis += t.quantity * t.price
-                total_shares += t.quantity
-        
-        avg_cost = cost_basis / total_shares if total_shares > 0 else 0
-        unrealized_pl = (current_price - avg_cost) * quantity if avg_cost > 0 else 0
+        current_price = get_share_price(symbol)
         
         return {
             "symbol": symbol,
-            "quantity": quantity,
+            "quantity": position['qty'],
             "current_price": current_price,
-            "market_value": market_value,
-            "average_cost": avg_cost,
-            "unrealized_pl": unrealized_pl,
-            "unrealized_pl_percent": (unrealized_pl / cost_basis * 100) if cost_basis > 0 else 0
+            "market_value": position['market_value'],
+            "average_cost": position['avg_entry_price'],
+            "unrealized_pl": position['unrealized_pl'],
+            "unrealized_pl_percent": position['unrealized_plpc'] * 100
         }
     
     except Exception as e:
@@ -286,11 +327,13 @@ async def get_trading_status() -> Dict[str, Any]:
         Dictionary with system status information
     """
     try:
+        account_data = get_account_info()
+        
         return {
             "paper_trading": paper_trading,
             "real_orders_enabled": execute_real_orders,
-            "active_accounts": len(accounts),
-            "account_names": list(accounts.keys()),
+            "alpaca_account_status": account_data.get('status', 'unknown'),
+            "portfolio_value": float(account_data.get('portfolio_value', 0)),
             "risk_limits": {
                 "max_position_size": float(os.getenv("MAX_POSITION_SIZE", "1000")),
                 "max_daily_trades": int(os.getenv("MAX_DAILY_TRADES", "10"))

@@ -21,13 +21,9 @@ class AlpacaClient:
     def __init__(self, paper_trading: bool = True):
         self.paper_trading = paper_trading
         
-        # Determine API endpoint
-        if paper_trading:
-            base_url = "https://paper-api.alpaca.markets"
-            data_url = "https://data.alpaca.markets"
-        else:
-            base_url = "https://api.alpaca.markets"
-            data_url = "https://data.alpaca.markets"
+        # Use environment-configured base URL
+        base_url = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets').replace('/v2', '')
+        data_url = "https://data.alpaca.markets"
         
         # Initialize trading API
         self.api = tradeapi.REST(
@@ -313,6 +309,23 @@ def is_market_open() -> bool:
     """
     status = alpaca_client.get_market_status()
     return status.get("is_open", False)
+
+# Additional functions needed by servers and UI
+def get_account_info():
+    """Get account info directly from Alpaca API"""
+    return alpaca_client.get_account_info()
+
+def get_positions():
+    """Get positions directly from Alpaca API"""
+    return alpaca_client.get_positions()
+
+def get_orders(status="all", limit=50):
+    """Get orders directly from Alpaca API"""
+    return alpaca_client.get_orders(status=status, limit=limit)
+
+def place_order(symbol: str, qty: int, side: str, order_type: str = "market", time_in_force: str = "gtc"):
+    """Place order directly through Alpaca API"""
+    return alpaca_client.place_market_order(symbol, qty, side, time_in_force)
 
 if __name__ == "__main__":
     # Test the client
