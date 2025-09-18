@@ -80,7 +80,7 @@ async def test_mcp_servers():
     
     # Test Alpaca server
     print("Testing Alpaca MCP Server...")
-    result = os.system("cd servers && timeout 3s uv run alpaca_server.py > /dev/null 2>&1")
+    result = os.system("cd src/servers && timeout 3s uv run alpaca_server.py > /dev/null 2>&1")
     if result == 124:  # timeout exit code
         print("✅ Alpaca server starts correctly (timed out as expected)")
     else:
@@ -88,7 +88,7 @@ async def test_mcp_servers():
     
     # Test Production Accounts server
     print("Testing Production Accounts MCP Server...")
-    result = os.system("cd servers && timeout 3s uv run production_accounts_server.py > /dev/null 2>&1")
+    result = os.system("cd src/servers && timeout 3s uv run production_accounts_server.py > /dev/null 2>&1")
     if result == 124:  # timeout exit code  
         print("✅ Production Accounts server starts correctly (timed out as expected)")
     else:

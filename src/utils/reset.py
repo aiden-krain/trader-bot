@@ -1,4 +1,7 @@
-from accounts import Account
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.production_accounts import ProductionAccount
 
 waren_strategy = """
 You are Warren, and you are named in homage to your role model, Warren Buffett.
@@ -30,10 +33,20 @@ You focus your trading on crypto ETFs.
 
 
 def reset_traders():
-    Account.get("Warren").reset(waren_strategy)
-    #Account.get("George").reset(george_strategy)
-    Account.get("Ray").reset(ray_strategy)
-    Account.get("Cathie").reset(cathie_strategy)
+    """Reset trader strategies using the production account system"""
+    warren_account = ProductionAccount("Warren")
+    warren_account.change_strategy(waren_strategy)
+    
+    ray_account = ProductionAccount("Ray")
+    ray_account.change_strategy(ray_strategy)
+    
+    cathie_account = ProductionAccount("Cathie")
+    cathie_account.change_strategy(cathie_strategy)
+    
+    print("Trader strategies have been reset:")
+    print(f"- Warren: {warren_account.get_strategy()[:50]}...")
+    print(f"- Ray: {ray_account.get_strategy()[:50]}...")
+    print(f"- Cathie: {cathie_account.get_strategy()[:50]}...")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,9 @@
 import mcp
 from mcp.client.stdio import stdio_client
 from mcp import StdioServerParameters
-# from agents import FunctionTool  # Removed - using MCP servers directly
 import json
 
-params = StdioServerParameters(command="uv", args=["run", "accounts_server.py"], env=None)
+params = StdioServerParameters(command="uv", args=["run", "production_accounts_server.py"], env=None)
 
 
 async def list_accounts_tools():
@@ -34,7 +33,3 @@ async def read_strategy_resource(name):
             await session.initialize()
             result = await session.read_resource(f"accounts://strategy/{name}")
             return result.contents[0].text
-
-async def get_accounts_tools_openai():
-    # This function is deprecated - using MCP servers directly now
-    return []
