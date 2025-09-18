@@ -1,13 +1,13 @@
 from contextlib import AsyncExitStack
 from accounts_client import read_accounts_resource, read_strategy_resource
-from agents.tracers import make_trace_id
+from trading_agents.tracers import make_trace_id
 from agents import Agent, Tool, Runner, OpenAIChatCompletionsModel, trace
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 import os
 import json
 from agents.mcp import MCPServerStdio
-from agents.templates import (
+from trading_agents.templates import (
     researcher_instructions,
     trader_instructions,
     trade_message,

@@ -1,13 +1,13 @@
-# AI Agent Development Guide for trader-bot
+# AI Trading Bot Development Guide
 
-This is a 6-week AI/Agentic Engineering course project focusing on autonomous AI agents, particularly Model Context Protocol (MCP) implementations for financial trading simulation.
+A production-ready autonomous trading system powered by AI agents, real-time market data, and comprehensive risk management. This system uses the Alpaca Trade API for actual market operations with sophisticated AI decision-making capabilities.
 
 ## Project Architecture
 
 ### Core Structure
-- **6_mcp/**: Week 6 MCP labs - the primary working directory containing the trading simulation
-- **pyproject.toml**: Uses `uv` package manager with extensive AI/ML dependencies (OpenAI, Anthropic, LangChain, CrewAI, AutoGen, etc.)
-- **Environment**: Designed for educational purposes with support for multiple AI model providers
+- **src/**: Main source directory containing all production components
+- **pyproject.toml**: Uses `uv` package manager with production-focused dependencies (OpenAI, Anthropic, Alpaca Trade API)
+- **Environment**: Production-ready system with paper trading safety and live trading capability
 
 ### Key Components
 
@@ -28,24 +28,28 @@ if __name__ == "__main__":
     mcp.run(transport='stdio')
 ```
 
-#### Agent Architecture
-- **Trader agents**: Use OpenAI Agents SDK with MCP servers for accounts, market data, and notifications
-- **Researcher agents**: Separate agents with web search, fetch, and memory capabilities via MCP
-- **Multi-model support**: GPT, DeepSeek, Gemini, Grok via different API endpoints
+#### Production Trading Architecture
+- **Trading Agents**: Use OpenAI and Anthropic models with MCP servers for real market operations
+- **Market Research**: Dual search capabilities via Serper (Google) + Brave Search APIs
+- **Risk Management**: Built-in position limits, trade validation, and portfolio risk controls
+- **Real Trading**: Alpaca Trade API integration with paper trading safety
 
 ### Critical Development Patterns
 
 #### Environment Configuration
 Always use `.env` files with these key variables:
-- API keys for multiple providers (OPENAI_API_KEY, DEEPSEEK_API_KEY, etc.)
-- `USE_MANY_MODELS=true/false` - toggles between single/multi-model mode
-- `RUN_EVERY_N_MINUTES` and `RUN_EVEN_WHEN_MARKET_IS_CLOSED` for simulation control
+- Trading API keys (ALPACA_KEY, ALPACA_SECRET)
+- AI model keys (OPENAI_API_KEY, ANTHROPIC_API_KEY)  
+- Search API keys (SERPER_API_KEY, BRAVE_API_KEY)
+- Safety controls (ALPACA_PAPER_TRADING=true, EXECUTE_REAL_ORDERS=false)
+- Risk limits (MAX_POSITION_SIZE, MAX_DAILY_TRADES, MAX_PORTFOLIO_RISK)
 
 #### MCP Server Parameters (mcp_params.py)
-Servers are configured via command arrays:
+Production servers are configured via command arrays:
 ```python
 trader_mcp_server_params = [
-    {"command": "uv", "args": ["run", "accounts_server.py"]},
+    {"command": "uv", "args": ["run", "alpaca_server.py"]},
+    {"command": "uv", "args": ["run", "production_accounts_server.py"]},
     {"command": "uvx", "args": ["mcp-server-fetch"]},
     {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-brave-search"], "env": brave_env}
 ]
@@ -72,21 +76,22 @@ async with AsyncExitStack() as stack:
 MCP servers have known issues on Windows - WSL (Windows Subsystem for Linux) is the recommended workaround per setup documentation.
 
 ### Database & Persistence
-- SQLite via `memory/` directory for individual agent memory
-- Account data persistence through `accounts.py` with portfolio tracking
-- Real-time logging system via `database.py` and `tracers.py`
+- SQLite via `accounts.db` for account and transaction tracking
+- Production account persistence through `production_accounts.py` with Alpaca sync
+- Real-time logging system via `database.py` and simplified `tracers.py`
 
 ### UI Layer
 Gradio-based dashboard (`app.py`) with:
-- Real-time portfolio monitoring
-- Transaction history tracking  
-- Multi-trader comparison views
+- Real-time portfolio monitoring with live Alpaca data
+- Transaction history tracking with actual trade records
+- Risk management status and limit monitoring
 - Auto-refresh timers and async updates
 
 ### Testing & Debugging
-- Extensive logging/tracing system via `tracers.py`
+- Comprehensive test suite via `test_system.py`
+- Simplified logging/tracing system via `tracers.py`
 - Gradio UI provides real-time debugging of agent decisions
-- Environment flags control simulation vs real market data
+- Environment flags control paper vs live trading
 
 ## Common Development Tasks
 
@@ -103,6 +108,26 @@ Gradio-based dashboard (`app.py`) with:
 ### Agent Customization
 Use `templates.py` for instruction prompts - separate researcher and trader instructions with dynamic content injection.
 
+## Production Trading Features
+
+### Real Market Integration
+- **Alpaca API**: Live market data and order execution
+- **Paper Trading**: Safe testing environment with real data
+- **Risk Controls**: Position limits, daily trade limits, portfolio risk management
+- **Account Sync**: Real-time balance and position tracking
+
+### Safety & Risk Management
+- **Default Paper Trading**: All operations in safe simulation mode
+- **Order Validation**: Pre-execution risk checks and position limits
+- **Trade Logging**: Complete audit trail of all decisions and executions
+- **Error Handling**: Comprehensive error handling with graceful degradation
+
+### Testing & Validation
+- **System Tests**: Comprehensive test suite via `test_system.py`
+- **Component Tests**: Individual MCP server testing
+- **Integration Tests**: End-to-end trading flow validation
+- **Risk Testing**: Position limit and risk control validation
+
 ## Important Conventions
 
 - Always use async/await for agent operations
@@ -110,3 +135,5 @@ Use `templates.py` for instruction prompts - separate researcher and trader inst
 - Environment variables control behavior - never hardcode configuration
 - Use structured logging with trace IDs for debugging complex agent interactions
 - Follow the existing naming patterns: `{name}_server.py` for servers, `{name}_client.py` for client utilities
+- **CRITICAL**: Always test with paper trading before enabling real money trading
+- **SAFETY FIRST**: All production operations must validate risk limits before execution

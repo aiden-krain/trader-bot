@@ -1,7 +1,7 @@
-from agents.traders import Trader
+from trading_agents.traders import Trader
 from typing import List
 import asyncio
-from agents.tracers import LogTracer
+from trading_agents.tracers import LogTracer
 # from agents import add_trace_processor  # Removed educational framework dependency
 from core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
