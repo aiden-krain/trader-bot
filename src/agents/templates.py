@@ -1,12 +1,7 @@
 from datetime import datetime
-from market import is_paid_polygon, is_realtime_polygon
 
-if is_realtime_polygon:
-    note = "You have access to realtime market data tools; use your get_last_trade tool for the latest trade price. You can also use tools for share information, trends and technical indicators and fundamentals."
-elif is_paid_polygon:
-    note = "You have access to market data tools but without access to the trade or quote tools; use your get_snapshot_ticker tool to get the latest share price on a 15 min delay. You can also use tools for share information, trends and technical indicators and fundamentals."
-else:
-    note = "You have access to end of day market data; use you get_share_price tool to get the share price as of the prior close."
+# Using Alpaca API for real-time market data
+note = "You have access to real-time market data through Alpaca API. Use your get_stock_price tool for current prices, get_market_status for trading hours, and search_stocks to find tickers. You also have access to comprehensive market research tools."
 
 
 def researcher_instructions():

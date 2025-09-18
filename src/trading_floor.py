@@ -1,34 +1,47 @@
-from traders import Trader
+from agents.traders import Trader
 from typing import List
 import asyncio
-from tracers import LogTracer
-from agents import add_trace_processor
-from market import is_market_open
+from agents.tracers import LogTracer
+# from agents import add_trace_processor  # Removed educational framework dependency
+from core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
 import os
 
 load_dotenv(override=True)
 
+# Initialize Alpaca client for market status
+alpaca_client = AlpacaClient(paper_trading=True)
+
 RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
 RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
     os.getenv("RUN_EVEN_WHEN_MARKET_IS_CLOSED", "false").strip().lower() == "true"
 )
-USE_MANY_MODELS = os.getenv("USE_MANY_MODELS", "false").strip().lower() == "true"
 
+# Trader personalities and names
 names = ["Warren", "George", "Ray", "Cathie"]
 lastnames = ["Patience", "Bold", "Systematic", "Crypto"]
 
-if USE_MANY_MODELS:
+# Simplified model selection: OpenAI and Anthropic only
+DEFAULT_MODEL_PROVIDER = os.getenv("DEFAULT_MODEL_PROVIDER", "openai").lower()
+USE_MIXED_MODELS = os.getenv("USE_MIXED_MODELS", "false").strip().lower() == "true"
+
+if USE_MIXED_MODELS:
+    # Mix of OpenAI and Anthropic models for diversity
     model_names = [
-        "gpt-4.1-mini",
-        "deepseek-chat",
-        "gemini-2.5-flash-preview-04-17",
-        "grok-3-mini-beta",
+        "gpt-4o-mini",
+        "claude-3-5-haiku-20241022", 
+        "gpt-4o",
+        "claude-3-5-sonnet-20241022"
     ]
-    short_model_names = ["GPT 4.1 Mini", "DeepSeek V3", "Gemini 2.5 Flash", "Grok 3 Mini"]
+    short_model_names = ["GPT 4o Mini", "Claude 3.5 Haiku", "GPT 4o", "Claude 3.5 Sonnet"]
 else:
-    model_names = ["gpt-4o-mini"] * 4
-    short_model_names = ["GPT 4o mini"] * 4
+    # Single provider mode
+    if DEFAULT_MODEL_PROVIDER == "anthropic":
+        model_names = ["claude-3-5-haiku-20241022"] * 4
+        short_model_names = ["Claude 3.5 Haiku"] * 4
+    else:
+        model_names = ["gpt-4o-mini"] * 4
+        short_model_names = ["GPT 4o Mini"] * 4
 
 
 def create_traders() -> List[Trader]:
@@ -38,17 +51,54 @@ def create_traders() -> List[Trader]:
     return traders
 
 
-async def run_every_n_minutes():
-    add_trace_processor(LogTracer())
+async def run_trading_cycle():
+    """Run a single trading cycle for all traders"""
+    # Initialize simple logging (removed educational framework)
+    logger = LogTracer()
     traders = create_traders()
-    while True:
-        if RUN_EVEN_WHEN_MARKET_IS_CLOSED or is_market_open():
-            await asyncio.gather(*[trader.run() for trader in traders])
+    
+    print(f"\n🤖 Running {len(traders)} traders with models: {short_model_names}")
+    
+    # Execute all traders concurrently
+    results = await asyncio.gather(*[trader.run() for trader in traders], return_exceptions=True)
+    
+    # Log any errors
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            print(f"❌ Trader {names[i]} failed: {result}")
         else:
-            print("Market is closed, skipping run")
+            print(f"✅ Trader {names[i]} completed successfully")
+
+async def run_every_n_minutes():
+    """Main trading loop"""
+    print(f"🚀 Starting Production Trading System")
+    print(f"   Mixed Models: {USE_MIXED_MODELS}")
+    print(f"   Default Provider: {DEFAULT_MODEL_PROVIDER}")
+    print(f"   Run Interval: {RUN_EVERY_N_MINUTES} minutes")
+    
+    while True:
+        try:
+            # Check market status
+            market_status = alpaca_client.get_market_status()
+            market_open = market_status.get("is_open", False)
+            
+            if RUN_EVEN_WHEN_MARKET_IS_CLOSED or market_open:
+                print(f"\n📊 Market Status: {'OPEN' if market_open else 'CLOSED'}")
+                await run_trading_cycle()
+                print(f"✅ Trading cycle completed")
+            else:
+                print(f"\n⏸️  Market closed - skipping (next check in {RUN_EVERY_N_MINUTES} minutes)")
+                
+        except Exception as e:
+            print(f"❌ Trading cycle error: {e}")
+            
         await asyncio.sleep(RUN_EVERY_N_MINUTES * 60)
 
 
 if __name__ == "__main__":
-    print(f"Starting scheduler to run every {RUN_EVERY_N_MINUTES} minutes")
-    asyncio.run(run_every_n_minutes())
+    try:
+        asyncio.run(run_every_n_minutes())
+    except KeyboardInterrupt:
+        print("\n🛑 Trading system stopped by user")
+    except Exception as e:
+        print(f"💥 System error: {e}")

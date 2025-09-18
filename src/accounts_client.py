@@ -1,7 +1,7 @@
 import mcp
 from mcp.client.stdio import stdio_client
 from mcp import StdioServerParameters
-from agents import FunctionTool
+# from agents import FunctionTool  # Removed - using MCP servers directly
 import json
 
 params = StdioServerParameters(command="uv", args=["run", "accounts_server.py"], env=None)
@@ -36,15 +36,5 @@ async def read_strategy_resource(name):
             return result.contents[0].text
 
 async def get_accounts_tools_openai():
-    openai_tools = []
-    for tool in await list_accounts_tools():
-        schema = {**tool.inputSchema, "additionalProperties": False}
-        openai_tool = FunctionTool(
-            name=tool.name,
-            description=tool.description,
-            params_json_schema=schema,
-            on_invoke_tool=lambda ctx, args, toolname=tool.name: call_accounts_tool(toolname, json.loads(args))
-                
-        )
-        openai_tools.append(openai_tool)
-    return openai_tools
+    # This function is deprecated - using MCP servers directly now
+    return []

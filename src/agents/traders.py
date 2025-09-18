@@ -1,20 +1,20 @@
 from contextlib import AsyncExitStack
 from accounts_client import read_accounts_resource, read_strategy_resource
-from tracers import make_trace_id
+from agents.tracers import make_trace_id
 from agents import Agent, Tool, Runner, OpenAIChatCompletionsModel, trace
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 import os
 import json
 from agents.mcp import MCPServerStdio
-from templates import (
+from agents.templates import (
     researcher_instructions,
     trader_instructions,
     trade_message,
     rebalance_message,
     research_tool,
 )
-from mcp_params import trader_mcp_server_params, researcher_mcp_server_params
+from config.mcp_params import trader_mcp_server_params, researcher_mcp_server_params
 
 load_dotenv(override=True)
 
@@ -106,7 +106,7 @@ class Trader:
                 await stack.enter_async_context(
                     MCPServerStdio(params, client_session_timeout_seconds=120)
                 )
-                for params in trader_mcp_server_params
+                for params in trader_mcp_server_params()  # Call function instead of using as variable
             ]
             async with AsyncExitStack() as stack:
                 researcher_mcp_servers = [
