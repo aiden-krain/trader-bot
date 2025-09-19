@@ -23,7 +23,7 @@ from core.risk_manager import RiskManager
 load_dotenv()
 
 
-class EnhancedAlpacaClient:
+class AlpacaClient:
     """
     Enhanced Alpaca client with integrated risk management and trading operations.
     Combines market data, trading, and risk controls in a single, simple interface.
@@ -414,7 +414,7 @@ if __name__ == "__main__":
     print("Testing Enhanced Alpaca Client...")
     
     try:
-        client = EnhancedAlpacaClient(trader_name="Warren")
+        client = AlpacaClient(trader_name="Warren")
         
         print("\\n" + "="*50)
         print("TRADING GUIDANCE:")

@@ -1,5 +1,5 @@
 """
-Clean Accounts MCP Server - Direct EnhancedAlpacaClient Integration.
+Clean Accounts MCP Server - Direct AlpacaClient Integration.
 Provides streamlined trading operations with integrated risk management.
 Simple, focused architecture for production trading.
 """
@@ -10,7 +10,7 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
-from core.alpaca_client import EnhancedAlpacaClient
+from core.alpaca_client import AlpacaClient
 from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
@@ -26,10 +26,10 @@ execute_real_orders = os.getenv("EXECUTE_REAL_ORDERS", "false").lower() == "true
 # Simple cache for trader clients
 _trader_clients = {}
 
-def get_trader_client(name: str) -> EnhancedAlpacaClient:
-    """Get or create trader-specific EnhancedAlpacaClient"""
+def get_trader_client(name: str) -> AlpacaClient:
+    """Get or create trader-specific AlpacaClient"""
     if name not in _trader_clients:
-        _trader_clients[name] = EnhancedAlpacaClient(paper_trading=paper_trading, trader_name=name)
+        _trader_clients[name] = AlpacaClient(paper_trading=paper_trading, trader_name=name)
     return _trader_clients[name]
 
 @mcp.tool()

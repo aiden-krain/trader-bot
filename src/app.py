@@ -3,7 +3,7 @@ from utils.util import css, js, Color
 import pandas as pd
 from trading_floor import names, lastnames, short_model_names
 import plotly.express as px
-from core.alpaca_client import get_account_info, get_positions, get_orders, get_share_price
+from core.alpaca_client import AlpacaClient
 from utils.database import read_log
 import json
 from datetime import datetime
@@ -25,13 +25,15 @@ class Trader:
         self.model_name = model_name
         self.account_data = None
         self.positions = []
+        # Initialize Alpaca client for this trader
+        self.alpaca_client = AlpacaClient(paper_trading=True, trader_name=name)
         self.reload()
 
     def reload(self):
         """Refresh account data from Alpaca API"""
         try:
-            self.account_data = get_account_info()
-            self.positions = get_positions()
+            self.account_data = self.alpaca_client.get_account_info()
+            self.positions = self.alpaca_client.get_positions()
         except Exception as e:
             print(f"Error loading account data for {self.name}: {e}")
             self.account_data = {"portfolio_value": 0, "cash": 0}
@@ -98,19 +100,24 @@ class Trader:
     def get_transactions_df(self) -> pd.DataFrame:
         """Convert recent orders to DataFrame for display"""
         try:
-            orders = get_orders(status="filled", limit=10)
-            if not orders:
-                return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
+            # For now, return empty DataFrame since get_orders method needs to be added to AlpacaClient
+            # TODO: Add get_orders method to AlpacaClient class
+            return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
+            
+            # This code will be used once get_orders is implemented:
+            # orders = self.alpaca_client.get_orders(status="filled", limit=10)
+            # if not orders:
+            #     return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
 
-            transactions_data = []
-            for order in orders:
-                transactions_data.append({
-                    "Timestamp": order.get("filled_at", order.get("submitted_at", ""))[:19],  # Trim to date/time
-                    "Symbol": order["symbol"],
-                    "Side": order["side"].upper(),
-                    "Quantity": order.get("filled_qty", order["qty"]),
-                    "Avg Price": f"${order.get('avg_fill_price', 0):.2f}" if order.get('avg_fill_price') else "N/A"
-                })
+            # transactions_data = []
+            # for order in orders:
+            #     transactions_data.append({
+            #         "Timestamp": order.get("filled_at", order.get("submitted_at", ""))[:19],  # Trim to date/time
+            #         "Symbol": order["symbol"],
+            #         "Side": order["side"].upper(),
+            #         "Quantity": order.get("filled_qty", order["qty"]),
+            #         "Avg Price": f"${order.get('avg_fill_price', 0):.2f}" if order.get('avg_fill_price') else "N/A"
+            #     })
             
             return pd.DataFrame(transactions_data)
         except Exception as e:

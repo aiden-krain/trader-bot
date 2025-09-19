@@ -14,7 +14,7 @@ def trader_mcp_server_params():
     """
     
     servers = [
-        # Clean accounts server - direct EnhancedAlpacaClient integration
+        # Clean accounts server - direct AlpacaClient integration
         {"command": "uv", "args": ["run", "servers/accounts_server.py"]},
         {"command": "uv", "args": ["run", "servers/push_server.py"]},
     ]
