@@ -5,7 +5,6 @@ load_dotenv(override=True)
 
 # Environment configurations for search services
 brave_env = {"BRAVE_API_KEY": os.getenv("BRAVE_API_KEY")}
-serper_env = {"SERPER_API_KEY": os.getenv("SERPER_API_KEY")}
 
 # Production MCP servers using Alpaca for real trading
 def trader_mcp_server_params():
@@ -15,20 +14,10 @@ def trader_mcp_server_params():
     """
     
     servers = [
-        # Core trading functionality
-        {"command": "uv", "args": ["run", "production_accounts_server.py"]},
-        {"command": "uv", "args": ["run", "alpaca_server.py"]},
-        {"command": "uv", "args": ["run", "push_server.py"]},
+        # Clean accounts server - direct EnhancedAlpacaClient integration
+        {"command": "uv", "args": ["run", "servers/accounts_server.py"]},
+        {"command": "uv", "args": ["run", "servers/push_server.py"]},
     ]
-    
-    # Add dual search capabilities for enhanced market research
-    # Both Serper (Google) and Brave Search for comprehensive coverage
-    if os.getenv("SERPER_API_KEY"):
-        servers.append({
-            "command": "uvx", 
-            "args": ["mcp-server-serper"], 
-            "env": serper_env
-        })
     
     if os.getenv("BRAVE_API_KEY"):
         servers.append({
@@ -36,9 +25,6 @@ def trader_mcp_server_params():
             "args": ["-y", "@modelcontextprotocol/server-brave-search"],
             "env": brave_env,
         })
-    
-    # Add memory for persistent agent learning
-    servers.append({"command": "uvx", "args": ["mcp-server-memory"]})
     
     return servers
 
@@ -60,14 +46,6 @@ def researcher_mcp_server_params(name: str):
             "env": {"LIBSQL_URL": f"file:./memory/{name}.db"},
         },
     ]
-    
-    # Dual search setup for comprehensive coverage
-    if os.getenv("SERPER_API_KEY"):
-        servers.append({
-            "command": "uvx", 
-            "args": ["mcp-server-serper"], 
-            "env": serper_env
-        })
     
     if os.getenv("BRAVE_API_KEY"):
         servers.append({

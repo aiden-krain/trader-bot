@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.production_accounts import ProductionAccount
+from core.alpaca_client import EnhancedAlpacaClient
 
 waren_strategy = """
 You are Warren, and you are named in homage to your role model, Warren Buffett.
@@ -33,20 +33,21 @@ You focus your trading on crypto ETFs.
 
 
 def reset_traders():
-    """Reset trader strategies using the production account system"""
-    warren_account = ProductionAccount("Warren")
-    warren_account.change_strategy(waren_strategy)
-    
-    ray_account = ProductionAccount("Ray")
-    ray_account.change_strategy(ray_strategy)
-    
-    cathie_account = ProductionAccount("Cathie")
-    cathie_account.change_strategy(cathie_strategy)
-    
-    print("Trader strategies have been reset:")
-    print(f"- Warren: {warren_account.get_strategy()[:50]}...")
-    print(f"- Ray: {ray_account.get_strategy()[:50]}...")
-    print(f"- Cathie: {cathie_account.get_strategy()[:50]}...")
+    """Verify trader connections using enhanced client system"""
+    try:
+        warren_client = EnhancedAlpacaClient(trader_name="Warren")
+        ray_client = EnhancedAlpacaClient(trader_name="Ray") 
+        cathie_client = EnhancedAlpacaClient(trader_name="Cathie")
+        
+        print("✅ Trader connections verified:")
+        print(f"- Warren: ${warren_client.calculate_portfolio_value():,.2f}")
+        print(f"- Ray: ${ray_client.calculate_portfolio_value():,.2f}")
+        print(f"- Cathie: ${cathie_client.calculate_portfolio_value():,.2f}")
+        
+        print(f"\n📝 Note: Strategies are now managed in trading_agents/templates.py")
+        
+    except Exception as e:
+        print(f"❌ Error verifying traders: {e}")
 
 
 if __name__ == "__main__":

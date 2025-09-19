@@ -5,6 +5,7 @@ from trading_agents.tracers import LogTracer
 from core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
 import os
+import json
 
 load_dotenv(override=True)
 
@@ -57,13 +58,21 @@ async def run_trading_cycle():
     
     print(f"\n🤖 Running {len(traders)} traders with models: {short_model_names}")
     
-    # Execute all traders concurrently
+    # Execute all traders concurrently for better performance
     results = await asyncio.gather(*[trader.run() for trader in traders], return_exceptions=True)
     
-    # Log any errors
+    # Log any errors with detailed exception information
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            print(f"❌ Trader {names[i]} failed: {result}")
+            print(f"❌ Trader {names[i]} failed with exception:")
+            print(f"   Exception type: {type(result).__name__}")
+            print(f"   Exception message: {str(result)}")
+            # Print the full exception traceback for debugging
+            import traceback
+            print(f"   Full traceback:")
+            traceback.print_exception(type(result), result, result.__traceback__)
+        elif result is None:
+            print(f"❌ Trader {names[i]} failed: returned None")
         else:
             print(f"✅ Trader {names[i]} completed successfully")
 
@@ -89,6 +98,8 @@ async def run_every_n_minutes():
                 
         except Exception as e:
             print(f"❌ Trading cycle error: {e}")
+            import traceback
+            traceback.print_exception(type(e), e, e.__traceback__)
             
         await asyncio.sleep(RUN_EVERY_N_MINUTES * 60)
 
@@ -100,3 +111,5 @@ if __name__ == "__main__":
         print("\n🛑 Trading system stopped by user")
     except Exception as e:
         print(f"💥 System error: {e}")
+        import traceback
+        traceback.print_exception(type(e), e, e.__traceback__)

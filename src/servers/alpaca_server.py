@@ -19,7 +19,10 @@ mcp = FastMCP("Alpaca Market Data & Trading")
 # Paper trading by default for safety - can be changed via environment variable
 import os
 paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
-alpaca = AlpacaClient(paper_trading=paper_trading)
+
+# Use Warren as default trader for shared market data server
+# This provides market data functionality that all traders can use
+alpaca = AlpacaClient(paper_trading=paper_trading, trader_name="Warren")
 
 @mcp.tool()
 async def get_stock_price(symbol: str) -> Dict[str, Any]:
@@ -64,12 +67,12 @@ async def get_market_status() -> Dict[str, Any]:
     return alpaca.get_market_status()
 
 @mcp.tool()
-async def get_account_info() -> Dict[str, Any]:
+async def get_market_account_info() -> Dict[str, Any]:
     """
-    Get Alpaca account information including buying power and portfolio value.
+    Get Alpaca market account information including buying power and portfolio value.
     
     Returns:
-        Dict containing account details and trading status
+        Dict containing market account details and trading status
     """
     account_info = alpaca.get_account_info()
     account_info["paper_trading"] = paper_trading

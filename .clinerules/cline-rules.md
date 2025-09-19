@@ -49,7 +49,7 @@ Production servers are configured via command arrays:
 ```python
 trader_mcp_server_params = [
     {"command": "uv", "args": ["run", "alpaca_server.py"]},
-    {"command": "uv", "args": ["run", "production_accounts_server.py"]},
+    {"command": "uv", "args": ["run", "accounts_server.py"]},
     {"command": "uvx", "args": ["mcp-server-fetch"]},
     {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-brave-search"], "env": brave_env}
 ]

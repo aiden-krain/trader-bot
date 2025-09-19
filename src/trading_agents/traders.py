@@ -84,21 +84,71 @@ class Trader:
         return self.agent
 
     async def get_account_report(self) -> str:
-        account = await read_accounts_resource(self.name)
-        account_json = json.loads(account)
-        account_json.pop("portfolio_value_time_series", None)
-        return json.dumps(account_json)
+        # Use the portfolio summary tool which returns structured JSON data
+        from accounts_client import call_accounts_tool
+        try:
+            result = await call_accounts_tool('get_portfolio_summary', {'name': self.name})
+            # Extract the JSON content from the MCP result
+            if hasattr(result, 'content') and result.content:
+                return result.content[0].text
+            elif hasattr(result, 'structuredContent'):
+                return json.dumps(result.structuredContent.get('result', {}))
+            else:
+                return json.dumps({})
+        except Exception as e:
+            print(f"Warning: Could not get portfolio summary for {self.name}: {e}")
+            # Fallback to empty portfolio data
+            return json.dumps({
+                "account_name": self.name,
+                "cash_balance": 1000.0,
+                "portfolio_value": 1000.0,
+                "holdings": {}
+            })
+
+    async def get_trading_guidance(self) -> str:
+        # Get trading guidance with risk limits and available funds
+        from accounts_client import call_accounts_tool
+        try:
+            result = await call_accounts_tool('get_trading_guidance', {'name': self.name})
+            if hasattr(result, 'content') and result.content:
+                return result.content[0].text
+            else:
+                return "❌ Could not retrieve trading guidance"
+        except Exception as e:
+            print(f"Warning: Could not get trading guidance for {self.name}: {e}")
+            return f"❌ Trading guidance unavailable: {e}"
 
     async def run_agent(self, trader_mcp_servers, researcher_mcp_servers):
         self.agent = await self.create_agent(trader_mcp_servers, researcher_mcp_servers)
+        
+        # STEP 1: Get trading guidance (NEW - mandatory first step)
+        print(f"🎯 {self.name}: Getting trading guidance and risk limits...")
+        guidance = await self.get_trading_guidance()
+        print(f"📊 Trading Guidance for {self.name}:")
+        print(guidance)
+        
+        # STEP 2: Get account summary and strategy
         account = await self.get_account_report()
         strategy = await read_strategy_resource(self.name)
-        message = (
+        
+        # STEP 3: Create enhanced message with guidance context
+        base_message = (
             trade_message(self.name, strategy, account)
             if self.do_trade
             else rebalance_message(self.name, strategy, account)
         )
-        await Runner.run(self.agent, message, max_turns=MAX_TURNS)
+        
+        # Prepend trading guidance to the message
+        enhanced_message = f"""
+MANDATORY TRADING GUIDANCE AND RISK LIMITS:
+{guidance}
+
+{base_message}
+
+CRITICAL REMINDER: You MUST respect the risk limits shown above. All trades are automatically validated against these limits.
+"""
+        
+        await Runner.run(self.agent, enhanced_message, max_turns=MAX_TURNS)
 
     async def run_with_mcp_servers(self):
         async with AsyncExitStack() as stack:

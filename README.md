@@ -27,7 +27,7 @@ src/
 │   └── production_accounts.py  # Account management with risk controls
 ├── servers/         # MCP servers for agent communication
 │   ├── alpaca_server.py             # Market data tools
-│   └── production_accounts_server.py # Trading execution tools
+│   └── accounts_server.py # Trading execution tools
 ├── config/          # System configuration
 │   └── mcp_params.py # MCP server and search configurations
 ├── utils/           # Utilities
@@ -134,7 +134,7 @@ Start individual MCP servers for development/testing:
 cd src/servers && uv run alpaca_server.py
 
 # Trading execution server  
-cd src/servers && uv run production_accounts_server.py
+cd src/servers && uv run accounts_server.py
 ```
 
 ## 🔒 Safety & Risk Management
