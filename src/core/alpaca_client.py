@@ -356,9 +356,8 @@ class AlpacaClient:
             risk_summary = self.risk_manager.get_risk_summary()
             
             guidance = f"""🎯 TRADING GUIDANCE - {self.trader_name.upper()}
-💰 Cash Available: ${float(account_info.get('cash', 0)):,.2f}
-📈 Portfolio Value: ${float(account_info.get('portfolio_value', 0)):,.2f}
-💪 Buying Power: ${float(account_info.get('buying_power', 0)):,.2f}
+ Portfolio Value: ${float(account_info.get('portfolio_value', 0)):,.2f}
+💪 Available for Trading: ${float(account_info.get('buying_power', 0)):,.2f}
 
 🛡️ RISK LIMITS:
 • Max Position Size: {risk_summary['max_position_size']}

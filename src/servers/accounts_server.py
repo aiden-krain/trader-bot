@@ -15,6 +15,9 @@ from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 
+# Import trader strategies
+from utils.reset import warren_strategy, ray_strategy, cathie_strategy
+
 load_dotenv()
 
 mcp = FastMCP("Accounts Server")
@@ -25,6 +28,13 @@ execute_real_orders = os.getenv("EXECUTE_REAL_ORDERS", "false").lower() == "true
 
 # Simple cache for trader clients
 _trader_clients = {}
+
+# Strategy mapping
+TRADER_STRATEGIES = {
+    "Warren": warren_strategy,
+    "Ray": ray_strategy,
+    "Cathie": cathie_strategy
+}
 
 def get_trader_client(name: str) -> AlpacaClient:
     """Get or create trader-specific AlpacaClient"""
@@ -152,6 +162,20 @@ async def get_trading_status() -> Dict[str, Any]:
         "risk_management": "enabled"
     }
 
+@mcp.tool()
+async def get_strategy(name: str) -> str:
+    """Get investment strategy for a trader"""
+    try:
+        strategy = TRADER_STRATEGIES.get(name)
+        if strategy:
+            return strategy.strip()
+        else:
+            return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+    except Exception as e:
+        error_msg = f"❌ Strategy retrieval error: {str(e)}"
+        write_log(name, "error", error_msg)
+        return error_msg
+
 # Resource endpoints (simplified)
 @mcp.resource("accounts://trader/{name}")
 async def read_trader_resource(name: str) -> str:
@@ -161,6 +185,15 @@ async def read_trader_resource(name: str) -> str:
         return client.get_trading_guidance()
     except Exception as e:
         return f"❌ Error loading trader {name}: {str(e)}"
+
+@mcp.resource("accounts://strategy/{name}")
+async def read_strategy_resource(name: str) -> str:
+    """Get trader investment strategy as resource"""
+    strategy = TRADER_STRATEGIES.get(name)
+    if strategy:
+        return strategy.strip()
+    else:
+        return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
 
 if __name__ == "__main__":
     print(f"🚀 Starting Accounts MCP Server")

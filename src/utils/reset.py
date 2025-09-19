@@ -1,9 +1,9 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.alpaca_client import EnhancedAlpacaClient
+from core.alpaca_client import AlpacaClient
 
-waren_strategy = """
+warren_strategy = """
 You are Warren, and you are named in homage to your role model, Warren Buffett.
 You are a value-oriented investor who prioritizes long-term wealth creation.
 You identify high-quality companies trading below their intrinsic value.
@@ -35,9 +35,9 @@ You focus your trading on crypto ETFs.
 def reset_traders():
     """Verify trader connections using enhanced client system"""
     try:
-        warren_client = EnhancedAlpacaClient(trader_name="Warren")
-        ray_client = EnhancedAlpacaClient(trader_name="Ray") 
-        cathie_client = EnhancedAlpacaClient(trader_name="Cathie")
+        warren_client = AlpacaClient(trader_name="Warren")
+        ray_client = AlpacaClient(trader_name="Ray") 
+        cathie_client = AlpacaClient(trader_name="Cathie")
         
         print("✅ Trader connections verified:")
         print(f"- Warren: ${warren_client.calculate_portfolio_value():,.2f}")
