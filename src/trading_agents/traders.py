@@ -10,9 +10,7 @@ from agents.mcp import MCPServerStdio
 from trading_agents.templates import (
     researcher_instructions,
     trader_instructions,
-    trade_message,
-    rebalance_message,
-    research_tool,
+    trading_session_message,
 )
 from config.mcp_params import trader_mcp_server_params, researcher_mcp_server_params
 
@@ -61,7 +59,7 @@ async def get_researcher(mcp_servers, model_name) -> Agent:
 
 async def get_researcher_tool(mcp_servers, model_name) -> Tool:
     researcher = await get_researcher(mcp_servers, model_name)
-    return researcher.as_tool(tool_name="Researcher", tool_description=research_tool())
+    return researcher.as_tool(tool_name="Researcher", tool_description="Research tool for market analysis and opportunity identification")
 
 
 class Trader:
@@ -70,18 +68,30 @@ class Trader:
         self.lastname = lastname
         self.agent = None
         self.model_name = model_name
-        self.do_trade = True
+        self._strategy = None  # Cache strategy as identity
 
     async def create_agent(self, trader_mcp_servers, researcher_mcp_servers) -> Agent:
+        # Load strategy as identity (once)
+        if not self._strategy:
+            self._strategy = await self._load_strategy()
+            
         tool = await get_researcher_tool(researcher_mcp_servers, self.model_name)
         self.agent = Agent(
             name=self.name,
-            instructions=trader_instructions(self.name),
+            instructions=trader_instructions(self.name, self._strategy),
             model=get_model(self.model_name),
             tools=[tool],
             mcp_servers=trader_mcp_servers,
         )
         return self.agent
+
+    async def _load_strategy(self):
+        """Load strategy as agent identity"""
+        try:
+            return await read_strategy_resource(self.name)
+        except Exception as e:
+            print(f"Strategy load failed for {self.name}: {e}")
+            return f"Default investment strategy for {self.name}"
 
     async def get_account_report(self) -> str:
         # Use the portfolio summary tool which returns structured JSON data
@@ -119,36 +129,35 @@ class Trader:
             return f"❌ Trading guidance unavailable: {e}"
 
     async def run_agent(self, trader_mcp_servers, researcher_mcp_servers):
-        self.agent = await self.create_agent(trader_mcp_servers, researcher_mcp_servers)
-        
-        # STEP 1: Get trading guidance (NEW - mandatory first step)
-        print(f"🎯 {self.name}: Getting trading guidance and risk limits...")
-        guidance = await self.get_trading_guidance()
-        print(f"📊 Trading Guidance for {self.name}:")
-        print(guidance)
-        
-        # STEP 2: Get account summary and strategy
-        account = await self.get_account_report()
-        strategy = await read_strategy_resource(self.name)
-        
-        # STEP 3: Create enhanced message with guidance context
-        base_message = (
-            trade_message(self.name, strategy, account)
-            if self.do_trade
-            else rebalance_message(self.name, strategy, account)
-        )
-        
-        # Prepend trading guidance to the message
-        enhanced_message = f"""
-MANDATORY TRADING GUIDANCE AND RISK LIMITS:
-{guidance}
+        """Unified agent execution - strategy as identity, memory-driven sessions"""
+        try:
+            self.agent = await self.create_agent(trader_mcp_servers, researcher_mcp_servers)
+            
+            # Get current account status for session
+            account = await self.get_account_report()
+            
+            # Build unified message
+            message = self._build_unified_message(account)
+            
+            # Execute unified trading session
+            await Runner.run(self.agent, message, max_turns=MAX_TURNS)
+            
+        except Exception as e:
+            print(f"Agent {self.name} execution failed: {e}")
+            raise
 
-{base_message}
-
-CRITICAL REMINDER: You MUST respect the risk limits shown above. All trades are automatically validated against these limits.
+    def _build_unified_message(self, account: str):
+        """Build unified trading message with strategy as identity"""
+        # Session uses memory and account status
+        session_message = trading_session_message(self.name, account)
+        
+        # Mandatory guidance reminder
+        guidance_reminder = """
+MANDATORY FIRST ACTION: Call get_trading_guidance before any trading decisions.
+This shows your funds, limits, current positions, and portfolio status.
 """
         
-        await Runner.run(self.agent, enhanced_message, max_turns=MAX_TURNS)
+        return f"{guidance_reminder}\n\n{session_message}"
 
     async def run_with_mcp_servers(self):
         async with AsyncExitStack() as stack:
@@ -168,14 +177,15 @@ CRITICAL REMINDER: You MUST respect the risk limits shown above. All trades are 
                 await self.run_agent(trader_mcp_servers, researcher_mcp_servers)
 
     async def run_with_trace(self):
-        trace_name = f"{self.name}-trading" if self.do_trade else f"{self.name}-rebalancing"
+        trace_name = f"{self.name}-trading"  # Unified approach - no more rebalancing split
         trace_id = make_trace_id(f"{self.name.lower()}")
         with trace(trace_name, trace_id=trace_id):
             await self.run_with_mcp_servers()
 
     async def run(self):
+        """Run unified trading session"""
         try:
             await self.run_with_trace()
         except Exception as e:
             print(f"Error running trader {self.name}: {e}")
-        self.do_trade = not self.do_trade
+        # No more do_trade toggle - unified approach
