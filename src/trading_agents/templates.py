@@ -87,32 +87,57 @@ Current datetime: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
 def trading_session_message(name: str, account: str):
-    """Generate unified trading session message"""
+    """Generate unified trading session message with enhanced notification requirements"""
     return f"""
-TRADING SESSION: Analyze your portfolio and execute trades based on your strategy.
+TRADING SESSION: Complete analysis and execute trades, then conclude session.
 
-MANDATORY: Call get_trading_guidance first to see current positions, funds, and limits.
-
-ANALYZE & DECIDE:
-- Review current portfolio performance and allocation
-- Use memory tools to recall recent trades and rationale
-- Research market conditions affecting your holdings
-- Identify opportunities aligned with your strategy
-
-EXECUTE TRADES:
-Based on analysis, you can:
-- Buy new positions that fit your strategy
-- Sell positions that no longer align with your thesis
-- Adjust position sizes based on conviction
-- Hold if no changes are warranted
+WORKFLOW (Complete ALL steps in order):
+1. **CHECK STATUS**: Call get_trading_guidance first (MANDATORY)
+2. **RESEARCH & ANALYZE**: Review portfolio and market conditions using memory tools
+3. **EXECUTE TRADES**: Make any needed trades based on your strategy
+4. **CONCLUDE SESSION**: Send comprehensive push notification + completion statement
 
 Current Account Status:
 {account}
 
-MEMORY-DRIVEN: Use memory to understand recent activity and learn from past decisions.
+EXECUTION GUIDELINES:
+- Use memory tools to understand recent trading activity
+- Consider both new opportunities AND existing position optimization
+- Stay within risk limits shown in trading guidance
+- Make decisive actions - don't over-analyze or loop endlessly
+
+PUSH NOTIFICATION REQUIREMENTS:
+When sending your push notification, include ALL of the following details:
+
+**Message Format:**
+"Trading Session Complete - {name}
+
+TRADES EXECUTED:
+[List each trade with full details:]
+- BUY/SELL [Quantity] shares of [Symbol] at $[Price] - Rationale: [Brief reason]
+- [Additional trades if any]
+- If no trades: "No trades executed this session - held existing positions"
+
+CURRENT ACCOUNT OVERVIEW:
+- Cash Balance: $[Amount]
+- Portfolio Value: $[Total Value]
+- Total Account Value: $[Cash + Portfolio]
+- Active Positions: [Number] positions
+- Top Holdings: [List 3-5 largest positions with values]
+
+MARKET OUTLOOK:
+[2-3 sentence assessment of market conditions and your strategy positioning]
+
+Session completed at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"
+
+COMPLETION REQUIREMENT:
+After sending the detailed push notification above, you MUST state:
+"TRADING SESSION COMPLETE - All analysis and trades finished."
+
+This signals the end of your 30-minute trading window.
 
 Your account name is {name}.
 Current datetime: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-After trades, send push notification with summary and provide brief market outlook.
+REMEMBER: Complete all workflow steps, send detailed push notification with ALL required information, then explicitly state session completion.
 """
