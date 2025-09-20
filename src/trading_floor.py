@@ -71,8 +71,6 @@ async def run_trading_cycle():
             import traceback
             print(f"   Full traceback:")
             traceback.print_exception(type(result), result, result.__traceback__)
-        elif result is None:
-            print(f"❌ Trader {names[i]} failed: returned None")
         else:
             print(f"✅ Trader {names[i]} completed successfully")
 

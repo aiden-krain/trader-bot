@@ -100,29 +100,46 @@ class Trader:
     def get_transactions_df(self) -> pd.DataFrame:
         """Convert recent orders to DataFrame for display"""
         try:
-            # For now, return empty DataFrame since get_orders method needs to be added to AlpacaClient
-            # TODO: Add get_orders method to AlpacaClient class
-            return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
-            
-            # This code will be used once get_orders is implemented:
-            # orders = self.alpaca_client.get_orders(status="filled", limit=10)
-            # if not orders:
-            #     return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
+            # Get recent orders from Alpaca API
+            orders = self.alpaca_client.get_orders(status="all", limit=10)
+            if not orders:
+                return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price", "Status"])
 
-            # transactions_data = []
-            # for order in orders:
-            #     transactions_data.append({
-            #         "Timestamp": order.get("filled_at", order.get("submitted_at", ""))[:19],  # Trim to date/time
-            #         "Symbol": order["symbol"],
-            #         "Side": order["side"].upper(),
-            #         "Quantity": order.get("filled_qty", order["qty"]),
-            #         "Avg Price": f"${order.get('avg_fill_price', 0):.2f}" if order.get('avg_fill_price') else "N/A"
-            #     })
+            transactions_data = []
+            for order in orders:
+                # Use filled_at if available, otherwise submitted_at
+                timestamp = order.get("filled_at") or order.get("submitted_at", "")
+                if timestamp:
+                    # Trim to date/time format (remove timezone info)
+                    timestamp = str(timestamp)[:19]
+                
+                # Clean up the side field (remove 'orderside.' prefix if present)
+                side = str(order.get("side", "")).replace("orderside.", "").upper()
+                
+                # Use filled_qty if available and > 0, otherwise use qty
+                filled_qty = order.get("filled_qty", 0)
+                quantity = filled_qty if filled_qty and filled_qty > 0 else order.get("qty", 0)
+                
+                # Format avg fill price
+                avg_price = order.get("avg_fill_price")
+                price_str = f"${avg_price:.2f}" if avg_price else "N/A"
+                
+                # Clean up status field (remove 'OrderStatus.' prefix if present)
+                status = str(order.get("status", "")).replace("OrderStatus.", "").title()
+                
+                transactions_data.append({
+                    "Timestamp": timestamp,
+                    "Symbol": order.get("symbol", ""),
+                    "Side": side,
+                    "Quantity": quantity,
+                    "Avg Price": price_str,
+                    "Status": status
+                })
             
             return pd.DataFrame(transactions_data)
         except Exception as e:
             print(f"Error getting transactions: {e}")
-            return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"])
+            return pd.DataFrame(columns=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price", "Status"])
 
     def get_portfolio_value(self) -> str:
         """Get portfolio value from Alpaca account data"""
@@ -186,14 +203,14 @@ class TraderView:
                 self.transactions_table = gr.Dataframe(
                     value=self.trader.get_transactions_df,
                     label="Recent Orders (Live from Alpaca)",
-                    headers=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price"],
+                    headers=["Timestamp", "Symbol", "Side", "Quantity", "Avg Price", "Status"],
                     row_count=(5, "dynamic"),
-                    col_count=5,
+                    col_count=6,
                     max_height=300,
                     elem_classes=["dataframe-fix"],
                 )
 
-        timer = gr.Timer(value=120)
+        timer = gr.Timer(value=5)
         timer.tick(
             fn=self.refresh,
             inputs=[],

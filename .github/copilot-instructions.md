@@ -5,17 +5,24 @@ A production-ready autonomous trading system powered by AI agents, real-time mar
 ## Project Architecture
 
 ### Core Structure
-- **src/**: Main source directory containing all production components
-- **pyproject.toml**: Uses `uv` package manager with production-focused dependencies (OpenAI, Anthropic, Alpaca Trade API)
-- **Environment**: Production-ready system with paper trading safety and live trading capability
+```
+src/
+├── trading_agents/     # AI agent logic and templates
+├── servers/           # MCP servers for tool communication  
+├── core/             # Trading engine and risk management
+├── config/           # MCP server configuration
+├── utils/            # Database, logging, utilities
+├── memory/           # SQLite databases for agent persistence
+└── app.py           # Gradio dashboard
+```
 
 ### Key Components
 
 #### MCP Server-Client Pattern
-The project implements a distributed MCP architecture:
+The project implements a distributed MCP architecture where AI agents communicate with specialized servers:
 
 ```python
-# Server pattern (e.g., accounts_server.py, market_server.py)
+# Server pattern (servers/*.py)
 from mcp.server.fastmcp import FastMCP
 mcp = FastMCP("server_name")
 
@@ -29,40 +36,52 @@ if __name__ == "__main__":
 ```
 
 #### Production Trading Architecture
-- **Trading Agents**: Use OpenAI and Anthropic models with MCP servers for real market operations
-- **Market Research**: Dual search capabilities via Serper (Google) + Brave Search APIs
-- **Risk Management**: Built-in position limits, trade validation, and portfolio risk controls
-- **Real Trading**: Alpaca Trade API integration with paper trading safety
+- **Trading Agents**: Use OpenAI/Anthropic models with structured templates (`templates.py`)
+- **Market Research**: Dual search (Serper + Brave) + persistent memory via SQLite  
+- **Risk Management**: Automatic validation via `RiskManager` class with configurable limits
+- **Real Trading**: Modern `alpaca-py` library with paper/live trading modes
 
 ### Critical Development Patterns
 
 #### Environment Configuration
 Always use `.env` files with these key variables:
-- Trading API keys (ALPACA_KEY, ALPACA_SECRET)
+- Trading API keys (ALPACA_KEY, ALPACA_SECRET, or trader-specific like WARREN_ALPACA_KEY)
 - AI model keys (OPENAI_API_KEY, ANTHROPIC_API_KEY)  
 - Search API keys (SERPER_API_KEY, BRAVE_API_KEY)
 - Safety controls (ALPACA_PAPER_TRADING=true, EXECUTE_REAL_ORDERS=false)
 - Risk limits (MAX_POSITION_SIZE, MAX_DAILY_TRADES, MAX_PORTFOLIO_RISK)
 
-#### MCP Server Parameters (mcp_params.py)
-Production servers are configured via command arrays:
+#### MCP Server Architecture (`config/mcp_params.py`)
+Servers are configured as function-based parameter factories:
 ```python
-trader_mcp_server_params = [
-    {"command": "uv", "args": ["run", "alpaca_server.py"]},
-    {"command": "uv", "args": ["run", "accounts_server.py"]},
-    {"command": "uvx", "args": ["mcp-server-fetch"]},
-    {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-brave-search"], "env": brave_env}
-]
+def trader_mcp_server_params():
+    return [
+        {"command": "uv", "args": ["run", "servers/accounts_server.py"]},
+        {"command": "uv", "args": ["run", "servers/push_server.py"]},
+        {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-brave-search"], "env": brave_env}
+    ]
 ```
 
-#### Async Context Management
-Always use AsyncExitStack for MCP server lifecycle:
+#### Trading Agent Pattern (`trading_agents/traders.py`)
+Agents follow a strict workflow with mandatory risk checks:
 ```python
-async with AsyncExitStack() as stack:
-    mcp_servers = [
-        await stack.enter_async_context(MCPServerStdio(params))
-        for params in server_params
-    ]
+async def run_agent(self, trader_mcp_servers, researcher_mcp_servers):
+    # STEP 1: Mandatory trading guidance check
+    guidance = await self.get_trading_guidance()
+    
+    # STEP 2: Build enhanced message with risk context  
+    enhanced_message = f"MANDATORY TRADING GUIDANCE:\n{guidance}\n\n{base_message}"
+    
+    # STEP 3: Run with structured templates
+    await Runner.run(self.agent, enhanced_message, max_turns=MAX_TURNS)
+```
+
+#### AlpacaClient Integration (`core/alpaca_client.py`)
+Modern `alpaca-py` library with integrated risk management:
+```python
+client = AlpacaClient(paper_trading=True, trader_name="Warren")
+result = client.buy_shares_with_risk_management(symbol, quantity, rationale)
+# Risk validation happens automatically before trade execution
 ```
 
 ### Package Management & Execution
@@ -77,8 +96,9 @@ MCP servers have known issues on Windows - WSL (Windows Subsystem for Linux) is 
 
 ### Database & Persistence
 - SQLite via `accounts.db` for account and transaction tracking
-- Production account persistence through `production_accounts.py` with Alpaca sync
-- Real-time logging system via `database.py` and simplified `tracers.py`
+- Agent memory databases in `memory/` directory (`Warren.db`, `Ray.db`, `Cathie.db`)
+- Real-time logging system via `utils/database.py` and simplified `trading_agents/tracers.py`
+- Direct Alpaca API integration for live account/position synchronization
 
 ### UI Layer
 Gradio-based dashboard (`app.py`) with:
@@ -97,16 +117,21 @@ Gradio-based dashboard (`app.py`) with:
 
 ### Adding New MCP Tools
 1. Define in appropriate server file with `@mcp.tool()` decorator
-2. Update `mcp_params.py` server configurations
+2. Update `config/mcp_params.py` server configurations
 3. Ensure proper async context management in agent initialization
 
 ### Model Integration
-1. Add API client in `traders.py` following existing patterns
+1. Add API client in `trading_agents/traders.py` following existing patterns
 2. Update `get_model()` function with base URL and client mapping
 3. Add to model arrays in `trading_floor.py`
 
 ### Agent Customization
-Use `templates.py` for instruction prompts - separate researcher and trader instructions with dynamic content injection.
+Use `trading_agents/templates.py` for instruction prompts - separate researcher and trader instructions with dynamic content injection.
+
+### Trader Management
+- Each trader has dedicated credentials (e.g., `WARREN_ALPACA_KEY`) with fallback to generic
+- Trader strategies defined in `utils/reset.py` and served via `accounts_server.py`
+- Agent memory persisted in SQLite databases per trader (`memory/{name}.db`)
 
 ## Production Trading Features
 
@@ -137,3 +162,24 @@ Use `templates.py` for instruction prompts - separate researcher and trader inst
 - Follow the existing naming patterns: `{name}_server.py` for servers, `{name}_client.py` for client utilities
 - **CRITICAL**: Always test with paper trading before enabling real money trading
 - **SAFETY FIRST**: All production operations must validate risk limits before execution
+
+## Execution Commands
+
+### Running the System
+```bash
+cd src && uv run trading_floor.py  # Main trading loop
+cd src && uv run app.py           # Gradio dashboard
+cd src && uv run test_system.py   # System tests
+```
+
+### MCP Server Testing
+```bash
+cd src/servers && uv run accounts_server.py  # Test accounts server
+cd src/servers && uv run alpaca_server.py    # Test market data server
+```
+
+### Key Environment Variables
+- `RUN_EVERY_N_MINUTES=60` - Trading cycle interval
+- `USE_MIXED_MODELS=true` - Mix OpenAI/Anthropic models
+- `DEFAULT_MODEL_PROVIDER=openai` - Default AI provider
+- `RUN_EVEN_WHEN_MARKET_IS_CLOSED=false` - Weekend/holiday trading

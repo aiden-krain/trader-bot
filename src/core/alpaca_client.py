@@ -143,6 +143,49 @@ class AlpacaClient:
         
         return test_prices.get(symbol.upper(), 100.0)
     
+    def get_market_status(self) -> Dict:
+        """Get current market status (open/closed)"""
+        try:
+            from alpaca.trading.requests import GetCalendarRequest
+            from datetime import datetime, date
+            
+            # Get today's market calendar
+            today = date.today()
+            request = GetCalendarRequest(start=today, end=today)
+            calendar = self.trading_client.get_calendar(request)
+            
+            if calendar:
+                market_day = calendar[0]
+                now = datetime.now().time()
+                market_open_time = market_day.open.time()
+                market_close_time = market_day.close.time()
+                
+                is_open = market_open_time <= now <= market_close_time
+                
+                return {
+                    "is_open": is_open,
+                    "date": str(today),
+                    "market_open": str(market_open_time),
+                    "market_close": str(market_close_time),
+                    "current_time": str(now)
+                }
+            else:
+                # Market is closed (no calendar entry for today)
+                return {
+                    "is_open": False,
+                    "date": str(today),
+                    "reason": "No market session today"
+                }
+                
+        except Exception as e:
+            print(f"Error getting market status: {e}")
+            # Default to market open for development/testing
+            return {
+                "is_open": True,
+                "error": str(e),
+                "fallback": "Assuming market open for development"
+            }
+    
     # =============================================================================
     # ACCOUNT & PORTFOLIO METHODS  
     # =============================================================================
@@ -193,6 +236,51 @@ class AlpacaClient:
         except Exception as e:
             print(f"Error calculating portfolio value: {e}")
             return 0.0
+    
+    def get_orders(self, status: str = "all", limit: int = 50) -> List[Dict]:
+        """Get order history from Alpaca"""
+        try:
+            from alpaca.trading.requests import GetOrdersRequest
+            from alpaca.trading.enums import QueryOrderStatus
+            
+            # Map status string to enum (only ALL, OPEN, CLOSED are available)
+            status_map = {
+                "all": QueryOrderStatus.ALL,
+                "open": QueryOrderStatus.OPEN, 
+                "closed": QueryOrderStatus.CLOSED,
+                "filled": QueryOrderStatus.CLOSED,  # Filled orders are in CLOSED status
+                "cancelled": QueryOrderStatus.CLOSED  # Cancelled orders are also in CLOSED status
+            }
+            
+            order_status = status_map.get(status.lower(), QueryOrderStatus.ALL)
+            
+            # Create request
+            request = GetOrdersRequest(status=order_status, limit=limit)
+            orders = self.trading_client.get_orders(filter=request)
+            
+            # Convert orders to dict format
+            order_dicts = []
+            for order in orders:
+                order_dict = {
+                    "id": str(order.id),
+                    "symbol": order.symbol,
+                    "qty": int(order.qty) if order.qty else 0,
+                    "filled_qty": int(order.filled_qty) if order.filled_qty else 0,
+                    "side": str(order.side).lower(),
+                    "order_type": str(order.order_type),
+                    "status": str(order.status),
+                    "submitted_at": str(order.submitted_at) if order.submitted_at else None,
+                    "filled_at": str(order.filled_at) if order.filled_at else None,
+                    "avg_fill_price": float(order.filled_avg_price) if order.filled_avg_price else None,
+                    "time_in_force": str(order.time_in_force) if order.time_in_force else None
+                }
+                order_dicts.append(order_dict)
+            
+            return order_dicts
+            
+        except Exception as e:
+            print(f"Error getting orders: {e}")
+            return []
     
     # =============================================================================
     # TRADING METHODS WITH RISK MANAGEMENT
