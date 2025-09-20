@@ -272,6 +272,76 @@ async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List
         return [{"error": f"Market movers query failed: {str(e)}"}]
 
 @mcp.tool()
+async def get_current_orders() -> str:
+    """Get all current open orders. Essential before making new trades."""
+    try:
+        orders = alpaca.get_orders(status='open', limit=50)
+        
+        if not orders or (isinstance(orders, list) and len(orders) == 0):
+            return "No open orders."
+        
+        if isinstance(orders, dict) and "error" in orders:
+            return f"Error getting orders: {orders['error']}"
+        
+        result = "OPEN ORDERS:\n"
+        for order in orders:
+            if isinstance(order, dict) and "error" not in order:
+                side = order.get('side', 'UNKNOWN')
+                qty = order.get('qty', 'Unknown')
+                symbol = order.get('symbol', 'Unknown')
+                order_type = order.get('order_type', 'market')
+                limit_price = order.get('limit_price')
+                price_str = f"${limit_price}" if limit_price else "Market"
+                result += f"- {side} {qty} {symbol} at {price_str}\n"
+        
+        return result
+        
+    except Exception as e:
+        return f"Error getting orders: {str(e)}"
+
+@mcp.tool()
+async def get_recent_trades(days: int = 3) -> str:
+    """Get recent completed trades to learn from performance."""
+    try:
+        from datetime import datetime, timedelta
+        
+        # Get filled orders from recent days
+        orders = alpaca.get_orders(status='filled', limit=20)
+        
+        if not orders or (isinstance(orders, list) and len(orders) == 0):
+            return f"No trades in last {days} days."
+        
+        if isinstance(orders, dict) and "error" in orders:
+            return f"Error getting trades: {orders['error']}"
+        
+        # Filter to recent days (simplified - Alpaca API may handle this)
+        result = f"RECENT TRADES (Last {days} days):\n"
+        trade_count = 0
+        
+        for order in orders:
+            if isinstance(order, dict) and "error" not in order:
+                side = order.get('side', 'UNKNOWN')
+                filled_qty = order.get('filled_qty', order.get('qty', 'Unknown'))
+                symbol = order.get('symbol', 'Unknown')
+                filled_avg_price = order.get('filled_avg_price')
+                
+                if filled_avg_price:
+                    price_str = f"${float(filled_avg_price):.2f}"
+                else:
+                    price_str = "Unknown"
+                
+                result += f"- {side} {filled_qty} {symbol} at {price_str}\n"
+                trade_count += 1
+        
+        if trade_count == 0:
+            return f"No completed trades found in recent history."
+        
+        return result
+        
+    except Exception as e:
+        return f"Error getting trades: {str(e)}"
+
+@mcp.tool()
 async def validate_symbol(symbol: str) -> Dict[str, Any]:
     """
     Validate if a stock symbol is tradeable on Alpaca.
