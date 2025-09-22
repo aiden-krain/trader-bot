@@ -12,37 +12,160 @@ This is a **production-ready AI trading system** that combines:
 - **Model Context Protocol (MCP)** for agent communication
 - **Paper trading** safety with live trading capability
 
-## 🏗️ Architecture
+## 🏗️ System Architecture & Data Flow
 
-### Core Components
+### 📊 Architecture Overview
+
+The system follows a **modular, layered architecture** with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    🚀 ORCHESTRATION LAYER                      │
+├─────────────────────────────────────────────────────────────────┤
+│  trading_floor.py  │  Creates traders, manages execution cycles │
+│  app.py           │  Gradio dashboard for monitoring/control   │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     🤖 AI AGENT LAYER                          │
+├─────────────────────────────────────────────────────────────────┤
+│  trading_agents/traders.py     │  Agent creation & execution    │
+│  trading_agents/templates.py   │  AI instruction templates      │
+│  trading_agents/tracers.py     │  Logging and tracing system    │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    🔧 MCP TOOLS LAYER                          │
+├─────────────────────────────────────────────────────────────────┤
+│  servers/accounts_server.py    │  Trading & account tools       │
+│  servers/alpaca_server.py      │  Market data tools             │
+│  servers/push_server.py        │  Notification tools            │
+│  config/mcp_params.py          │  MCP server configurations     │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   💼 CORE BUSINESS LAYER                       │
+├─────────────────────────────────────────────────────────────────┤
+│  core/alpaca_client.py         │  Main facade & orchestration   │
+│  core/trading_client.py        │  Risk-managed order execution  │
+│  core/account_client.py        │  Account & portfolio operations │
+│  core/market_data_client.py    │  Price & market data           │
+│  core/base_alpaca_client.py    │  Shared connection management   │
+│  core/risk_manager.py          │  Advanced risk assessment      │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   🎯 STRATEGY & CONFIG LAYER                   │
+├─────────────────────────────────────────────────────────────────┤
+│  strategies/strategies.py      │  Trading strategies (Warren,   │
+│  strategies/__init__.py        │  Ray, Cathie) with risk limits │
+│  utils/database.py             │  Logging and data persistence   │
+│  utils/util.py                 │  Helper functions               │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     🌐 EXTERNAL APIS                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Alpaca Trading API            │  Live market data & execution  │
+│  OpenAI/Anthropic APIs         │  AI model inference            │
+│  Serper/Brave Search APIs      │  Market research & news        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 🔄 Data Flow Diagram
+
+```
+1. STARTUP FLOW:
+   trading_floor.py
+   ├── Creates Trader instances (Warren, Ray, Cathie)
+   ├── Each Trader gets strategy from strategies/strategies.py
+   ├── AlpacaClient created with strategy-specific risk limits
+   └── MCP servers started (accounts_server.py, alpaca_server.py)
+
+2. TRADING CYCLE FLOW:
+   Trader.run_trading_session()
+   ├── Templates generate AI instructions with strategy context
+   ├── Agent connects to MCP tools via mcp_params.py configuration
+   ├── Agent uses tools: get_account_info, get_stock_price, buy_shares
+   ├── MCP servers delegate to core clients:
+   │   ├── accounts_server.py → AlpacaClient → TradingClient
+   │   └── alpaca_server.py → AlpacaClient → MarketDataClient
+   ├── TradingClient applies enhanced risk assessment
+   ├── Risk-approved trades execute via Alpaca API
+   └── Results logged via database.py
+
+3. RISK MANAGEMENT FLOW:
+   buy_shares_with_risk_management()
+   ├── TradingClient.buy_shares_with_risk_management()
+   ├── RiskManager.validate_trade(return_assessment=True)
+   ├── Conviction-based position sizing (1-10 scale)
+   ├── Real-time risk feedback (🟢🟡🟠🔴🚨)
+   ├── Smart warnings and suggestions
+   └── Trade execution or rejection with detailed feedback
+```
+
+### 🏗️ Core Components
 
 ```
 src/
-├── agents/          # AI trading agents and logic
-│   ├── traders.py   # Main trader agent implementation
-│   ├── templates.py # AI instruction templates
-│   └── tracers.py   # Logging and tracing system
-├── core/            # Trading system core
-│   ├── alpaca_client.py        # Real market data & trading
-│   └── production_accounts.py  # Account management with risk controls
-├── servers/         # MCP servers for agent communication
-│   ├── alpaca_server.py             # Market data tools
-│   └── accounts_server.py # Trading execution tools
-├── config/          # System configuration
-│   └── mcp_params.py # MCP server and search configurations
-├── utils/           # Utilities
-│   ├── database.py  # Data persistence and logging
-│   └── util.py      # Helper functions
-├── app.py          # Gradio web dashboard
-└── trading_floor.py # Main orchestrator
+├── trading_agents/     # 🤖 AI Agent Layer
+│   ├── traders.py      # Agent creation, MCP integration, execution
+│   ├── templates.py    # Strategy-aware AI instruction templates
+│   └── tracers.py      # Comprehensive logging and tracing
+├── core/              # 💼 Core Business Layer
+│   ├── alpaca_client.py        # Main facade with strategy integration
+│   ├── trading_client.py       # Enhanced risk-managed trading
+│   ├── account_client.py       # Account & portfolio operations
+│   ├── market_data_client.py   # Real-time market data
+│   ├── base_alpaca_client.py   # Shared connection management
+│   └── risk_manager.py         # Advanced risk assessment system
+├── servers/           # 🔧 MCP Tools Layer
+│   ├── accounts_server.py      # Trading & account MCP tools
+│   ├── alpaca_server.py        # Market data MCP tools
+│   └── push_server.py          # Notification MCP tools
+├── strategies/        # 🎯 Strategy Layer
+│   ├── strategies.py           # Warren, Ray, Cathie strategies
+│   └── __init__.py            # Strategy factory and registry
+├── config/            # ⚙️ Configuration
+│   └── mcp_params.py          # MCP server configurations
+├── utils/             # 🛠️ Utilities
+│   ├── database.py            # Logging and data persistence
+│   └── util.py                # Helper functions and utilities
+├── app.py            # 📊 Web Dashboard
+└── trading_floor.py  # 🚀 Main Orchestrator
 ```
 
-### MCP (Model Context Protocol) Integration
+### 🔧 Component Integration
 
-The system uses MCP servers to provide AI agents with secure, validated access to:
-- **Market Data**: Real-time prices, market status, stock search
-- **Trading Operations**: Account management, order execution, portfolio tracking
-- **Market Research**: Dual search capabilities via Serper + Brave Search
+**Strategy → Client Integration:**
+```python
+# strategies/strategies.py defines Warren strategy
+warren_strategy = Warren(max_position_size=1500)
+risk_limits = warren_strategy.get_risk_limits()
+
+# core/alpaca_client.py integrates strategy
+client = AlpacaClient(trader_name="Warren")  # Auto-loads Warren strategy
+client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
+```
+
+**MCP Tools → Core Integration:**
+```python
+# servers/accounts_server.py exposes buy_shares tool
+@mcp.tool()
+async def buy_shares(symbol, quantity, rationale, conviction_level=5):
+    client = get_trader_client("Warren")  # Gets AlpacaClient
+    return client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
+
+# core/trading_client.py handles execution with risk assessment
+def buy_shares_with_risk_management(self, symbol, quantity, rationale, conviction_level=5):
+    assessment = self.risk_manager.validate_trade(..., return_assessment=True)
+    # Real-time risk feedback: 📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
+```
 
 ## 📊 Features
 
@@ -50,23 +173,34 @@ The system uses MCP servers to provide AI agents with secure, validated access t
 - **Real Market Data**: Live prices and market status via Alpaca
 - **Paper Trading**: Safe simulation environment with real data
 - **Live Trading**: Production capability (disabled by default)
-- **Risk Management**: Position limits, daily trade limits, portfolio risk controls
+- **Modular Architecture**: Specialized clients for market data, accounts, and trading
 
 ### ✅ AI-Powered Decision Making
 - **Dual AI Models**: OpenAI GPT + Anthropic Claude for diverse strategies
+- **Strategy Framework**: Injectable Warren, Ray, and Cathie strategies
 - **Market Research**: Comprehensive news and sentiment analysis
 - **Autonomous Trading**: Fully automated decision making and execution
+
+### ✅ Advanced Risk Management System
+- **Enhanced Risk Scoring**: 0-100 risk scores with five intuitive levels (🟢🟡🟠🔴🚨)
+- **Conviction-Based Trading**: Dynamic position sizing based on confidence (1-10 scale)
+- **Pre-Trade Assessment**: Detailed risk analysis before execution
+- **Real-Time Feedback**: Color-coded risk levels and smart suggestions
+- **Intelligent Warnings**: Specific, actionable alerts with position recommendations
+- **Performance Optimized**: Single-pass risk calculation for efficiency
 
 ### ✅ Comprehensive Research
 - **Dual Search**: Serper (Google Search) + Brave Search APIs
 - **News Analysis**: Real-time market news and sentiment
 - **Technical Analysis**: Market data analysis and trend identification
+- **Persistent Memory**: Research continuity across trading sessions
 
-### ✅ Risk & Safety Controls
-- **Position Limits**: Maximum position sizes per trade
-- **Daily Limits**: Maximum number of trades per day
-- **Portfolio Risk**: Maximum portfolio risk percentage
-- **Validation**: All trades validated before execution
+### ✅ Safety & Monitoring
+- **Position Limits**: Strategy-specific maximum position sizes
+- **Daily Limits**: Configurable maximum trades per day
+- **Portfolio Risk**: Percentage-based portfolio risk controls
+- **Complete Logging**: Comprehensive audit trail and decision tracking
+- **Web Dashboard**: Real-time monitoring via Gradio interface
 
 ## 🔧 Setup & Installation
 
@@ -101,11 +235,6 @@ The system uses MCP servers to provide AI agents with secure, validated access t
    # Market Research
    SERPER_API_KEY=your_serper_key
    BRAVE_API_KEY=your_brave_key
-   
-   # Risk Management
-   MAX_POSITION_SIZE=1000
-   MAX_DAILY_TRADES=10
-   MAX_PORTFOLIO_RISK=0.02
    ```
 
 3. **Run system tests:**
@@ -146,11 +275,27 @@ cd src/servers && uv run accounts_server.py
 - **Daily Limits**: 10 trades maximum per day
 - **Portfolio Risk**: 2% maximum portfolio risk
 
-### Risk Controls
-- **Pre-trade validation**: All orders validated before execution
-- **Account synchronization**: Real-time balance and position tracking
-- **Error handling**: Comprehensive error handling and logging
-- **Audit trail**: Complete transaction and decision logging
+### Enhanced Risk Controls
+- **Pre-trade Assessment**: Detailed risk analysis with scoring and recommendations
+- **Conviction-Based Sizing**: Position sizes adjust based on trader confidence
+- **Real-Time Feedback**: Live risk assessment during trading execution
+- **Smart Warnings**: Actionable alerts when approaching risk limits
+- **Account Synchronization**: Real-time balance and position tracking
+- **Complete Audit Trail**: Comprehensive transaction and decision logging
+
+### Risk Management Examples
+```bash
+# Example risk assessment output during trading:
+📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
+⚠️  Risk Warnings: Position size ($1,400) is 93.3% of your limit
+💡 Suggestion: Consider 6 shares instead of 8 for lower risk
+✅ Buy 6 AAPL at $175.00 (Risk: low) - Strong earnings outlook
+
+# Conviction-based position sizing:
+Conviction 3/10: Recommends 3 shares ($525) - Conservative approach
+Conviction 8/10: Recommends 6 shares ($1,050) - High confidence trade
+Conviction 10/10: Recommends 7 shares ($1,225) - Maximum conviction
+```
 
 ## ⚠️ Important Warnings
 
@@ -171,4 +316,6 @@ This software is for educational and research purposes. Trading involves financi
 
 ---
 
-**🎯 Ready for Production Trading with AI-Powered Decision Making**
+**🎯 Sophisticated AI Trading Platform with Advanced Risk Management**
+
+*Production-ready system featuring modular architecture, conviction-based trading, and real-time risk assessment*
