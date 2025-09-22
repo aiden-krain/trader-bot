@@ -150,16 +150,36 @@ def refresh_trader_data():
 def get_logs():
     """Get recent trading logs"""
     try:
-        logs = read_log(limit=50)  # Get last 50 log entries
-        if logs:
+        # Get logs for all traders
+        all_logs = []
+        for trader_name in ["warren", "ray", "cathie"]:
+            try:
+                trader_logs = list(read_log(trader_name, last_n=20))
+                for log_entry in trader_logs:
+                    if len(log_entry) >= 3:
+                        timestamp, log_type, message = log_entry
+                        all_logs.append({
+                            'trader': trader_name.title(),
+                            'timestamp': timestamp,
+                            'type': log_type,
+                            'message': message
+                        })
+            except Exception as trader_error:
+                continue
+        
+        if all_logs:
+            # Sort by timestamp (most recent first)
+            all_logs.sort(key=lambda x: x['timestamp'], reverse=True)
+            
             log_text = ""
-            for log in logs[-10:]:  # Show last 10 entries
-                timestamp = log.get('timestamp', 'Unknown')
-                message = log.get('message', 'No message')
-                log_text += f"**{timestamp}:** {message}\n\n"
-            return log_text
+            for log in all_logs[:15]:  # Show last 15 entries
+                trader = log['trader']
+                timestamp = log['timestamp']
+                message = log['message']
+                log_text += f"**{timestamp} - {trader}:** {message}\n\n"
+            return log_text if log_text else "No recent logs available"
         else:
-            return "No logs available"
+            return "No logs available yet - logs will appear after trading activity"
     except Exception as e:
         return f"Error loading logs: {str(e)}"
 
@@ -202,12 +222,12 @@ with gr.Blocks(css=css, js=js, title="AI Trading Bot Dashboard") as demo:
             refresh_logs_btn = gr.Button("🔄 Refresh Logs", variant="secondary")
             refresh_logs_btn.click(fn=get_logs, outputs=logs_display)
     
-    # Auto-refresh every 30 seconds
-    demo.load(fn=get_trading_status, outputs=status_display, every=30)
+    # Auto-refresh every 30 seconds - removed due to Gradio version compatibility
+    # Users can manually refresh using the refresh button
 
 if __name__ == "__main__":
-    # Get port from environment (Railway sets this)
-    port = int(os.environ.get("PORT", 7860))
+    # Get port from environment (Railway sets this, otherwise try different ports)
+    port = int(os.environ.get("PORT", 7861))  # Changed default to 7861
     
     print(f"🌐 Starting Gradio dashboard on port {port}")
     print(f"🤖 Trading bot running in background")
@@ -217,5 +237,6 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=port,
         share=False,
-        show_error=True
+        show_error=True,
+        inbrowser=False  # Don't auto-open browser
     )

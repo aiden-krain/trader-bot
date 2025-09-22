@@ -90,8 +90,8 @@ Remember: "Time is the friend of the wonderful company, the enemy of the mediocr
     def get_risk_limits(self) -> Dict[str, Any]:
         return {
             "max_position_size": self.max_position_size,
-            "max_portfolio_risk": 0.02,  # 2% - very conservative
-            "max_daily_trades": 3,  # Limited trading frequency
+            "max_portfolio_risk": 0.5,  # 2% - very conservative
+            "max_daily_trades": 20,  # Limited trading frequency
             "risk_tolerance": "low",
             "position_sizing_method": "conservative",
             "stop_loss_tolerance": 0.15,  # 15% stop loss
@@ -103,7 +103,7 @@ Remember: "Time is the friend of the wonderful company, the enemy of the mediocr
 class Ray(Strategy):
     """Ray Dalio-inspired systematic diversified strategy with detailed methodology."""
     
-    def __init__(self, max_position_size: int = 800):
+    def __init__(self, max_position_size: int = 1000):
         super().__init__("Ray", max_position_size)
     
     def get_instructions(self) -> str:
@@ -150,8 +150,8 @@ Remember: "He who lives by the crystal ball will eat shattered glass."
     def get_risk_limits(self) -> Dict[str, Any]:
         return {
             "max_position_size": self.max_position_size,
-            "max_portfolio_risk": 0.03,  # 3% - moderate risk
-            "max_daily_trades": 5,  # Moderate trading frequency
+            "max_portfolio_risk": 0.5,  # 3% - moderate risk
+            "max_daily_trades": 20,  # Moderate trading frequency
             "risk_tolerance": "medium",
             "position_sizing_method": "risk_parity",
             "stop_loss_tolerance": 0.12,  # 12% stop loss
@@ -165,7 +165,7 @@ Remember: "He who lives by the crystal ball will eat shattered glass."
 class Cathie(Strategy):
     """Cathie Wood-inspired disruptive innovation strategy with detailed focus areas."""
     
-    def __init__(self, max_position_size: int = 1200):
+    def __init__(self, max_position_size: int = 1000):
         super().__init__("Cathie", max_position_size)
     
     def get_instructions(self) -> str:
@@ -220,8 +220,8 @@ Remember: "Innovation is the key to long-term wealth creation."
     def get_risk_limits(self) -> Dict[str, Any]:
         return {
             "max_position_size": self.max_position_size,
-            "max_portfolio_risk": 0.05,  # 5% - higher risk tolerance
-            "max_daily_trades": 8,  # Active trading approach
+            "max_portfolio_risk": 0.5,  # 5% - higher risk tolerance
+            "max_daily_trades": 20,  # Active trading approach
             "risk_tolerance": "high",
             "position_sizing_method": "conviction_weighted",
             "stop_loss_tolerance": 0.20,  # 20% stop loss - higher for growth stocks
