@@ -19,14 +19,21 @@ mapper = {
 
 
 class Trader:
+    # Class-level cache for shared clients
+    _client_cache = {}
+    
     def __init__(self, name: str, lastname: str, model_name: str):
         self.name = name
         self.lastname = lastname
         self.model_name = model_name
         self.account_data = None
         self.positions = []
-        # Initialize Alpaca client for this trader
-        self.alpaca_client = AlpacaClient(paper_trading=True, trader_name=name)
+        
+        # Use cached client if available, otherwise create new one
+        if name not in self._client_cache:
+            self._client_cache[name] = AlpacaClient(paper_trading=True, trader_name=name)
+        
+        self.alpaca_client = self._client_cache[name]
         self.reload()
 
     def reload(self):

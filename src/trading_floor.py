@@ -9,8 +9,7 @@ import json
 
 load_dotenv(override=True)
 
-# Initialize default Alpaca client for market status (uses Warren's credentials as default)
-alpaca_client = AlpacaClient(paper_trading=True, trader_name="Warren")
+# We'll check market status within the trading cycle using the traders' clients
 
 RUN_EVERY_N_MINUTES = int(os.getenv("RUN_EVERY_N_MINUTES", "60"))
 RUN_EVEN_WHEN_MARKET_IS_CLOSED = (
@@ -56,6 +55,27 @@ async def run_trading_cycle():
     logger = LogTracer()
     traders = create_traders()
     
+    # Check market status using the first trader's client
+    market_status = traders[0].alpaca_client.get_market_status()
+    market_open = market_status.get("is_open", False)
+    
+    # Display market status with timezone info
+    status_display = "OPEN" if market_open else "CLOSED"
+    current_time_et = market_status.get("current_time_et", "Unknown")
+    market_open_time = market_status.get("market_open", "09:30:00")
+    market_close_time = market_status.get("market_close", "16:00:00")
+    
+    print(f"\n📊 Market Status: {status_display}")
+    print(f"   🕒 Eastern Time: {current_time_et} (Market: {market_open_time} - {market_close_time})")
+    
+    if market_status.get("reason"):
+        print(f"   📅 {market_status['reason']}")
+    
+    # Decide whether to trade or not
+    if not (RUN_EVEN_WHEN_MARKET_IS_CLOSED or market_open):
+        print(f"⏸️  Market closed - skipping trading")
+        return False  # Indicate no trading occurred
+    
     print(f"\n🤖 Running {len(traders)} traders with models: {short_model_names}")
     
     # Execute all traders concurrently for better performance
@@ -73,6 +93,8 @@ async def run_trading_cycle():
             traceback.print_exception(type(result), result, result.__traceback__)
         else:
             print(f"✅ Trader {names[i]} completed successfully")
+    
+    return True  # Indicate trading occurred
 
 async def run_every_n_minutes():
     """Main trading loop"""
@@ -83,16 +105,13 @@ async def run_every_n_minutes():
     
     while True:
         try:
-            # Check market status
-            market_status = alpaca_client.get_market_status()
-            market_open = market_status.get("is_open", False)
+            # Run trading cycle (includes market status check)
+            trading_occurred = await run_trading_cycle()
             
-            if RUN_EVEN_WHEN_MARKET_IS_CLOSED or market_open:
-                print(f"\n📊 Market Status: {'OPEN' if market_open else 'CLOSED'}")
-                await run_trading_cycle()
+            if trading_occurred:
                 print(f"✅ Trading cycle completed")
             else:
-                print(f"\n⏸️  Market closed - skipping (next check in {RUN_EVERY_N_MINUTES} minutes)")
+                print(f"⏸️  Skipping trading (next check in {RUN_EVERY_N_MINUTES} minutes)")
                 
         except Exception as e:
             print(f"❌ Trading cycle error: {e}")

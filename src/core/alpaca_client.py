@@ -6,8 +6,9 @@ Consolidates all trading functionality in a single, clean interface.
 
 import os
 import sys
+import time
 import json
-from typing import Dict, Optional, List, Union, Tuple, Any
+from typing import Dict, Any, List, Tuple, Optional, Union
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -15,220 +16,84 @@ from datetime import datetime, timedelta
 from alpaca.trading.client import TradingClient
 from alpaca.data.historical.stock import StockHistoricalDataClient
 
-# Add utils path for database operations and risk management
+# Add utils path for database operations
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.database import write_log
-from core.risk_manager import RiskManager
 
-load_dotenv()
+# Import decomposed clients
+from core.market_data_client import MarketDataClient
+from core.account_client import AccountClient
+from core.trading_client import TradingClient
 
 # Import strategy system
-try:
-    from strategies import create_strategy, list_strategies
-    STRATEGY_SYSTEM_AVAILABLE = True
-except ImportError:
-    STRATEGY_SYSTEM_AVAILABLE = False
-    print("⚠️  Strategy system not available, using fallback definitions")
-    
-    # Fallback strategy definitions for backward compatibility
-    warren_strategy = """
-    You are Warren, and you are named in homage to your role model, Warren Buffett.
-    You are a value-oriented investor who prioritizes long-term wealth creation.
-    You identify high-quality companies trading below their intrinsic value.
-    You invest patiently and hold positions through market fluctuations, 
-    relying on meticulous fundamental analysis, steady cash flows, strong management teams, 
-    and competitive advantages. You rarely react to short-term market movements, 
-    trusting your deep research and value-driven strategy.
-    """
+from strategies import create_strategy, list_strategies
 
-    ray_strategy = """
-    You are Ray, and you are named in homage to your role model, Ray Dalio.
-    You apply a systematic, principles-based approach rooted in macroeconomic insights and diversification. 
-    You invest broadly across asset classes, utilizing risk parity strategies to achieve balanced returns 
-    in varying market environments. You pay close attention to macroeconomic indicators, central bank policies, 
-    and economic cycles, adjusting your portfolio strategically to manage risk and preserve capital across diverse market conditions.
-    """
-
-    cathie_strategy = """
-    You are Cathie, and you are named in homage to your role model, Cathie Wood.
-    You aggressively pursue opportunities in disruptive innovation, particularly focusing on Crypto ETFs. 
-    Your strategy is to identify and invest boldly in sectors poised to revolutionize the economy, 
-    accepting higher volatility for potentially exceptional returns. You closely monitor technological breakthroughs, 
-    regulatory changes, and market sentiment in crypto ETFs, ready to take bold positions 
-    and actively manage your portfolio to capitalize on rapid growth trends.
-    You focus your trading on crypto ETFs.
-    """
-
-    # Fallback strategy mapping
-    TRADER_STRATEGIES = {
-        "Warren": warren_strategy,
-        "Ray": ray_strategy,
-        "Cathie": cathie_strategy
-    }
+load_dotenv()
 
 
 class AlpacaClient:
     """
     Enhanced Alpaca client with integrated risk management and trading operations.
-    Combines market data, trading, and risk controls in a single, simple interface.
+    Now uses decomposed architecture with specialized clients for better maintainability.
+    Maintains full backward compatibility with existing code.
     """
     
     def __init__(self, paper_trading: bool = True, trader_name: str = None):
         self.paper_trading = paper_trading
         self.trader_name = trader_name or "Unknown"
         
-        # Get trader-specific API credentials
-        api_key, secret_key = self._get_trader_credentials(trader_name)
+        # Create the first client which will establish and cache the connection
+        self.market_data = MarketDataClient(paper_trading, trader_name)
         
-        # Initialize modern alpaca-py clients
-        self.trading_client = TradingClient(
-            api_key=api_key,
-            secret_key=secret_key,
-            paper=paper_trading
-        )
+        # Share the connection with other clients to avoid multiple connections
+        shared_connection = {
+            'trading_client': self.market_data.trading_client,
+            'data_client': self.market_data.data_client,
+            'api_key': self.market_data.api_key,
+            'secret_key': self.market_data.secret_key
+        }
         
-        self.data_client = StockHistoricalDataClient(api_key, secret_key)
+        self.account = AccountClient(paper_trading, trader_name, shared_connection)
+        self.trading = TradingClient(paper_trading, trader_name, None, shared_connection)
         
-        # Initialize risk management
-        self.risk_manager = RiskManager(self.trader_name)
+        # Maintain existing attributes for backward compatibility
+        self.trading_client = self.market_data.trading_client
+        self.data_client = self.market_data.data_client
+        self.risk_manager = self.trading.risk_manager
+        self.api_key = self.market_data.api_key
+        self.secret_key = self.market_data.secret_key
         
-        # Store credentials for compatibility
-        self.api_key = api_key
-        self.secret_key = secret_key
-        
-        # Verify connection
-        self._verify_connection()
+        # Display risk limits summary
+        self._display_risk_summary()
     
-    def _get_trader_credentials(self, trader_name: str = None) -> tuple[str, str]:
-        """Retrieve trader-specific or generic Alpaca API credentials"""
-        api_key = None
-        secret_key = None
-        
-        # Try trader-specific credentials first
-        if trader_name:
-            print(f"🔍 Retrieving Alpaca API credentials for {trader_name}")
-            trader_key = f"{trader_name.upper()}_ALPACA_KEY"
-            trader_secret = f"{trader_name.upper()}_ALPACA_SECRET"
-            
-            api_key = os.getenv(trader_key)
-            secret_key = os.getenv(trader_secret)
-            
-            if api_key and secret_key:
-                print(f"🔑 Using trader-specific credentials for {trader_name}")
-                return api_key, secret_key
-            else:
-                print(f"⚠️  Trader-specific credentials not found for {trader_name}, falling back to generic")
-        
-        # Fall back to generic credentials
-        if not api_key or not secret_key:
-            api_key = os.getenv("ALPACA_KEY")
-            secret_key = os.getenv("ALPACA_SECRET")
-            
-            if api_key and secret_key:
-                print("🔑 Using generic Alpaca credentials")
-                return api_key, secret_key
-        
-        # If we still don't have credentials, raise an error
-        raise ValueError("No Alpaca API credentials found. Please set ALPACA_KEY and ALPACA_SECRET environment variables.")
-    
-    def _verify_connection(self):
-        """Verify API connection and log account status"""
-        try:
-            account = self.trading_client.get_account()
-            env_type = "Paper" if self.paper_trading else "Live"
-            print(f"✅ Connected to Alpaca {env_type} Trading")
-            print(f"   Account Status: {account.status}")
-            print(f"   Buying Power: ${float(account.buying_power):,.2f}")
-            print(f"   Portfolio Value: ${float(account.portfolio_value):,.2f}")
-        except Exception as e:
-            print(f"❌ Failed to connect to Alpaca: {e}")
-            raise e
+    def _display_risk_summary(self):
+        """Display a clean summary of risk limits for this trader"""
+        risk_summary = self.risk_manager.get_risk_summary()
+        print(f"   🛡️  Risk Limits: Max Position {risk_summary['max_position_size']} | Portfolio Risk {risk_summary['max_portfolio_risk']} | Daily Trades {risk_summary['max_daily_trades']}")
     
     # =============================================================================
     # MARKET DATA METHODS
     # =============================================================================
     
     def get_real_price(self, symbol: str) -> float:
-        """Get current real-time price for a symbol with fallbacks"""
-        try:
-            from alpaca.data.requests import StockLatestQuoteRequest
-            req = StockLatestQuoteRequest(symbol_or_symbols=symbol)
-            quotes = self.data_client.get_stock_latest_quote(req)
-            
-            if symbol in quotes:
-                quote = quotes[symbol]
-                # Use midpoint of bid/ask for more accurate pricing
-                if quote.ask_price and quote.bid_price:
-                    return (float(quote.ask_price) + float(quote.bid_price)) / 2
-                elif quote.ask_price:
-                    return float(quote.ask_price)
-                elif quote.bid_price:
-                    return float(quote.bid_price)
-                    
-            # Fallback to latest trade
-            from alpaca.data.requests import StockLatestTradeRequest
-            trade_req = StockLatestTradeRequest(symbol_or_symbols=symbol)
-            trades = self.data_client.get_stock_latest_trade(trade_req)
-            
-            if symbol in trades:
-                trade = trades[symbol]
-                if trade.price:
-                    return float(trade.price)
-            
-        except Exception as e:
-            print(f"Error getting real-time price for {symbol}: {e}")
-        
-        # Fallback to reasonable test prices for development
-        test_prices = {
-            "AAPL": 175.50, "TSLA": 245.30, "GOOGL": 142.20, "MSFT": 415.80,
-            "AMZN": 185.70, "NVDA": 128.45, "META": 512.30, "SPY": 565.40,
-            "QQQ": 485.20, "IWM": 224.60, "VTI": 285.30, "BRK.B": 450.20
-        }
-        
-        return test_prices.get(symbol.upper(), 100.0)
+        """Get current real-time price for a symbol - pure Alpaca integration"""
+        return self.market_data.get_real_price(symbol)
     
     def get_market_status(self) -> Dict:
         """Get current market status (open/closed)"""
-        try:
-            from alpaca.trading.requests import GetCalendarRequest
-            from datetime import datetime, date
-            
-            # Get today's market calendar
-            today = date.today()
-            request = GetCalendarRequest(start=today, end=today)
-            calendar = self.trading_client.get_calendar(request)
-            
-            if calendar:
-                market_day = calendar[0]
-                now = datetime.now().time()
-                market_open_time = market_day.open.time()
-                market_close_time = market_day.close.time()
-                
-                is_open = market_open_time <= now <= market_close_time
-                
-                return {
-                    "is_open": is_open,
-                    "date": str(today),
-                    "market_open": str(market_open_time),
-                    "market_close": str(market_close_time),
-                    "current_time": str(now)
-                }
-            else:
-                # Market is closed (no calendar entry for today)
-                return {
-                    "is_open": False,
-                    "date": str(today),
-                    "reason": "No market session today"
-                }
-                
-        except Exception as e:
-            print(f"Error getting market status: {e}")
-            # Default to market open for development/testing
-            return {
-                "is_open": True,
-                "error": str(e),
-                "fallback": "Assuming market open for development"
-            }
+        return self.market_data.get_market_status()
+    
+    def get_quote(self, symbol: str) -> Dict[str, Any]:
+        """Get current quote data for a symbol"""
+        return self.market_data.get_quote(symbol)
+    
+    def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 30) -> Dict[str, Any]:
+        """Get historical price bars for a symbol"""
+        return self.market_data.get_bars(symbol, timeframe, limit)
+    
+    def search_assets(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search for tradeable assets by symbol or name"""
+        return self.market_data.search_assets(query, limit)
     
     # =============================================================================
     # ACCOUNT & PORTFOLIO METHODS  
@@ -236,137 +101,54 @@ class AlpacaClient:
     
     def get_account_info(self) -> Dict:
         """Get comprehensive account information"""
-        try:
-            account = self.trading_client.get_account()
-            return {
-                "cash": float(account.cash),
-                "portfolio_value": float(account.portfolio_value),
-                "buying_power": float(account.buying_power),
-                "equity": float(account.equity),
-                "last_equity": float(account.last_equity),
-                "status": str(account.status),
-                "account_blocked": bool(getattr(account, 'account_blocked', False)),
-                "trading_blocked": bool(getattr(account, 'trading_blocked', False)),
-                "pattern_day_trader": bool(getattr(account, 'pattern_day_trader', False)),
-                "day_trade_count": int(getattr(account, 'day_trade_count', 0)),
-                "daytrade_buying_power": float(getattr(account, 'daytrade_buying_power', account.buying_power))
-            }
-        except Exception as e:
-            return {"error": str(e)}
+        return self.account.get_account_info()
     
     def get_positions(self) -> List[Dict]:
         """Get all current positions"""
-        try:
-            positions = self.trading_client.get_all_positions()
-            return [{
-                "symbol": pos.symbol,
-                "qty": float(pos.qty),
-                "side": "long" if float(pos.qty) > 0 else "short",
-                "market_value": float(pos.market_value) if pos.market_value else 0.0,
-                "avg_entry_price": float(pos.avg_entry_price) if pos.avg_entry_price else 0.0,
-                "current_price": float(pos.current_price) if pos.current_price else 0.0,
-                "unrealized_pl": float(pos.unrealized_pl) if pos.unrealized_pl else 0.0,
-                "unrealized_plpc": float(pos.unrealized_plpc) if pos.unrealized_plpc else 0.0,
-                "cost_basis": float(pos.cost_basis) if pos.cost_basis else 0.0
-            } for pos in positions]
-        except Exception as e:
-            return []
+        return self.account.get_positions()
     
     def calculate_portfolio_value(self) -> float:
         """Calculate current portfolio value using real Alpaca data"""
-        try:
-            account_info = self.get_account_info()
-            return float(account_info.get("portfolio_value", 0))
-        except Exception as e:
-            print(f"Error calculating portfolio value: {e}")
-            return 0.0
+        return self.account.calculate_portfolio_value()
     
     def get_orders(self, status: str = "all", limit: int = 50) -> List[Dict]:
         """Get order history from Alpaca"""
-        try:
-            from alpaca.trading.requests import GetOrdersRequest
-            from alpaca.trading.enums import QueryOrderStatus
-            
-            # Map status string to enum (only ALL, OPEN, CLOSED are available)
-            status_map = {
-                "all": QueryOrderStatus.ALL,
-                "open": QueryOrderStatus.OPEN, 
-                "closed": QueryOrderStatus.CLOSED,
-                "filled": QueryOrderStatus.CLOSED,  # Filled orders are in CLOSED status
-                "cancelled": QueryOrderStatus.CLOSED  # Cancelled orders are also in CLOSED status
-            }
-            
-            order_status = status_map.get(status.lower(), QueryOrderStatus.ALL)
-            
-            # Create request
-            request = GetOrdersRequest(status=order_status, limit=limit)
-            orders = self.trading_client.get_orders(filter=request)
-            
-            # Convert orders to dict format
-            order_dicts = []
-            for order in orders:
-                order_dict = {
-                    "id": str(order.id),
-                    "symbol": order.symbol,
-                    "qty": int(order.qty) if order.qty else 0,
-                    "filled_qty": int(order.filled_qty) if order.filled_qty else 0,
-                    "side": str(order.side).lower(),
-                    "order_type": str(order.order_type),
-                    "status": str(order.status),
-                    "submitted_at": str(order.submitted_at) if order.submitted_at else None,
-                    "filled_at": str(order.filled_at) if order.filled_at else None,
-                    "avg_fill_price": float(order.filled_avg_price) if order.filled_avg_price else None,
-                    "time_in_force": str(order.time_in_force) if order.time_in_force else None
-                }
-                order_dicts.append(order_dict)
-            
-            return order_dicts
-            
-        except Exception as e:
-            print(f"Error getting orders: {e}")
-            return []
+        return self.account.get_orders(status, limit)
+    
+    def get_portfolio_summary(self) -> Dict[str, Any]:
+        """Get portfolio summary with positions and account data"""
+        return self.account.get_portfolio_summary()
+    
+    def get_portfolio_report(self) -> str:
+        """Get detailed portfolio report"""
+        return self.account.get_portfolio_report()
     
     # =============================================================================
     # STRATEGY MANAGEMENT METHODS
     # =============================================================================
     
+    def _get_strategy_risk_limits(self) -> dict:
+        """Get risk limits from the strategy for this trader"""
+        return self.trading._get_strategy_risk_limits()
+    
     def get_strategy(self) -> str:
         """Get investment strategy for this trader"""
         try:
-            if STRATEGY_SYSTEM_AVAILABLE:
-                # Use simple strategy system
-                strategy_obj = create_strategy(self.trader_name)
-                return strategy_obj.get_instructions()
-            else:
-                # Fallback to old system
-                strategy = TRADER_STRATEGIES.get(self.trader_name)
-                if strategy:
-                    return strategy.strip()
-                else:
-                    return f"No strategy found for trader {self.trader_name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+            strategy_obj = create_strategy(self.trader_name)
+            return strategy_obj.get_instructions()
         except Exception as e:
             error_msg = f"❌ Strategy retrieval error: {str(e)}"
             write_log(self.trader_name, "error", error_msg)
             return error_msg
     
-    def get_portfolio_summary(self) -> Dict[str, Any]:
-        """Get portfolio summary with positions and account data"""
-        try:
-            account_info = self.get_account_info()
-            positions = self.get_positions()
-            
-            return {
-                "trader": self.trader_name,
-                "cash": float(account_info.get('cash', 0)),
-                "portfolio_value": float(account_info.get('portfolio_value', 0)),
-                "buying_power": float(account_info.get('buying_power', 0)),
-                "positions_count": len(positions),
-                "positions": positions,
-                "paper_trading": self.paper_trading
-            }
-        except Exception as e:
-            write_log(self.trader_name, "error", f"Portfolio summary error: {str(e)}")
-            return {"error": str(e)}
+    def get_risk_summary(self) -> Dict[str, str]:
+        """Get a summary of current risk limits from the RiskManager"""
+        return self.risk_manager.get_risk_summary()
+    
+    def assess_trade_risk(self, symbol: str, quantity: int, conviction_level: int = 5) -> Dict[str, Any]:
+        """Pre-trade risk assessment with scoring and recommendations"""
+        return self.trading.assess_trade_risk(symbol, quantity, conviction_level)
+    
     
     # =============================================================================
     # TRADING METHODS WITH RISK MANAGEMENT
@@ -374,149 +156,15 @@ class AlpacaClient:
     
     def place_market_order(self, symbol: str, qty: int, side: str) -> Dict:
         """Place market order using modern alpaca-py"""
-        try:
-            from alpaca.trading.requests import MarketOrderRequest
-            from alpaca.trading.enums import OrderSide, TimeInForce
-            
-            # Convert side to proper enum
-            order_side = OrderSide.BUY if side.lower() == "buy" else OrderSide.SELL
-            
-            # Create market order request
-            market_order_data = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=order_side,
-                time_in_force=TimeInForce.DAY
-            )
-            
-            # Submit the order
-            order = self.trading_client.submit_order(order_data=market_order_data)
-            
-            return {
-                "success": True,
-                "order_id": str(order.id),
-                "symbol": order.symbol,
-                "qty": int(order.qty),
-                "side": str(order.side),
-                "status": str(order.status)
-            }
-            
-        except Exception as e:
-            from alpaca.common.exceptions import APIError
-            if isinstance(e, APIError):
-                return {"success": False, "error": f"Alpaca API Error: {e}"}
-            else:
-                return {"success": False, "error": f"Order failed: {str(e)}"}
+        return self.trading.place_market_order(symbol, qty, side)
     
     def buy_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
         """Execute buy order with integrated risk management and logging"""
-        try:
-            # Input validation
-            if quantity <= 0:
-                return "❌ Invalid quantity: must be positive"
-            
-            # Get current price
-            price = self.get_real_price(symbol)
-            if price <= 0:
-                return f"❌ Could not get price for {symbol}"
-            
-            # Risk management validation
-            portfolio_value = self.calculate_portfolio_value()
-            
-            # Get daily trade count for risk validation
-            today = datetime.now().strftime("%Y-%m-%d")
-            try:
-                from alpaca.trading.requests import GetOrdersRequest
-                from alpaca.trading.enums import QueryOrderStatus
-                
-                request = GetOrdersRequest(status=QueryOrderStatus.CLOSED, limit=50)
-                orders = self.trading_client.get_orders(filter=request)
-                today_trades = sum(1 for order in orders if order.filled_at and str(order.filled_at).startswith(today))
-            except:
-                today_trades = 0
-            
-            is_valid, risk_message = self.risk_manager.validate_trade(symbol, quantity, price, portfolio_value, today_trades)
-            if not is_valid:
-                write_log(self.trader_name, "risk", f"Buy order rejected: {risk_message}")
-                return f"❌ {risk_message}"
-            
-            # Check buying power
-            account_info = self.get_account_info()
-            cash_balance = float(account_info.get("cash", 0))
-            estimated_cost = price * quantity
-            
-            if estimated_cost > cash_balance:
-                return f"❌ Insufficient funds: Need ${estimated_cost:,.2f}, have ${cash_balance:,.2f}"
-            
-            # Execute order
-            order_result = self.place_market_order(symbol, quantity, "buy")
-            
-            if order_result.get("success", False):
-                write_log(self.trader_name, "trading", f"✅ Buy {quantity} {symbol} at ${price:.2f} - {rationale}")
-                return f"✅ Successfully bought {quantity} shares of {symbol} at ${price:.2f}\\n\\n{self.get_portfolio_report()}"
-            else:
-                error_msg = order_result.get("error", "Unknown error")
-                write_log(self.trader_name, "error", f"❌ Buy order failed: {error_msg}")
-                return f"❌ Buy order failed: {error_msg}"
-                
-        except Exception as e:
-            write_log(self.trader_name, "error", f"❌ Buy order exception: {str(e)}")
-            return f"❌ Error executing buy order: {str(e)}"
+        return self.trading.buy_shares_with_risk_management(symbol, quantity, rationale)
     
     def sell_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
         """Execute sell order with integrated risk management and logging"""
-        try:
-            # Input validation
-            if quantity <= 0:
-                return "❌ Invalid quantity: must be positive"
-            
-            # Check if we have enough shares to sell
-            positions = self.get_positions()
-            current_position = next((pos for pos in positions if pos["symbol"] == symbol), None)
-            
-            if not current_position or float(current_position["qty"]) < quantity:
-                available = float(current_position["qty"]) if current_position else 0
-                return f"❌ Insufficient shares: Need {quantity}, have {available} shares of {symbol}"
-            
-            # Get current price
-            price = self.get_real_price(symbol)
-            if price <= 0:
-                return f"❌ Could not get price for {symbol}"
-            
-            # Risk management validation (mainly for daily limits)
-            portfolio_value = self.calculate_portfolio_value()
-            
-            # Get daily trade count
-            today = datetime.now().strftime("%Y-%m-%d")
-            try:
-                from alpaca.trading.requests import GetOrdersRequest
-                from alpaca.trading.enums import QueryOrderStatus
-                
-                request = GetOrdersRequest(status=QueryOrderStatus.CLOSED, limit=50)
-                orders = self.trading_client.get_orders(filter=request)
-                today_trades = sum(1 for order in orders if order.filled_at and str(order.filled_at).startswith(today))
-            except:
-                today_trades = 0
-            
-            is_valid, risk_message = self.risk_manager.validate_trade(symbol, quantity, price, portfolio_value, today_trades)
-            if not is_valid:
-                write_log(self.trader_name, "risk", f"Sell order rejected: {risk_message}")
-                return f"❌ {risk_message}"
-            
-            # Execute order
-            order_result = self.place_market_order(symbol, quantity, "sell")
-            
-            if order_result.get("success", False):
-                write_log(self.trader_name, "trading", f"✅ Sell {quantity} {symbol} at ${price:.2f} - {rationale}")
-                return f"✅ Successfully sold {quantity} shares of {symbol} at ${price:.2f}\\n\\n{self.get_portfolio_report()}"
-            else:
-                error_msg = order_result.get("error", "Unknown error")
-                write_log(self.trader_name, "error", f"❌ Sell order failed: {error_msg}")
-                return f"❌ Sell order failed: {error_msg}"
-                
-        except Exception as e:
-            write_log(self.trader_name, "error", f"❌ Sell order exception: {str(e)}")
-            return f"❌ Error executing sell order: {str(e)}"
+        return self.trading.sell_shares_with_risk_management(symbol, quantity, rationale)
     
     # =============================================================================
     # REPORTING & GUIDANCE METHODS
@@ -553,38 +201,24 @@ class AlpacaClient:
             
         except Exception as e:
             return f"❌ Error getting trading guidance: {str(e)}"
-    
-    def get_portfolio_report(self) -> str:
-        """Get detailed portfolio report"""
-        try:
-            account_info = self.get_account_info()
-            positions = self.get_positions()
-            
-            report = f"""📊 ACCOUNT REPORT - {self.trader_name.upper()}
-💰 Cash Balance: ${float(account_info.get('cash', 0)):,.2f}
-📈 Portfolio Value: ${float(account_info.get('portfolio_value', 0)):,.2f}
-📊 Total P&L: ${float(account_info.get('portfolio_value', 0)) - 1000:.2f} ({((float(account_info.get('portfolio_value', 0)) / 1000) - 1) * 100:.1f}%)
 
-🏢 Holdings ({len(positions)} positions):"""
-            
-            if positions:
-                for pos in positions:
-                    current_price = float(pos.get('current_price', 0))
-                    qty = float(pos['qty'])
-                    market_value = current_price * qty
-                    report += f"\\n  • {pos['symbol']}: {qty} shares @ ${current_price:.2f} = ${market_value:.2f}"
-            else:
-                report += "\\n  No positions currently held"
-            
-            return report
-            
-        except Exception as e:
-            return f"❌ Error generating portfolio report: {str(e)}"
+    # =============================================================================
+    # COMPATIBILITY METHODS (for backward compatibility)
+    # =============================================================================
+    
+    def get_current_price(self, symbol: str) -> float:
+        """Alias for get_real_price for backward compatibility"""
+        return self.get_real_price(symbol)
+    
+    def _verify_connection(self):
+        """Verify connection - delegated to base client"""
+        # Connection is already verified in the specialized clients
+        pass
 
 
 if __name__ == "__main__":
     # Test the enhanced client
-    print("Testing Enhanced Alpaca Client...")
+    print("Testing Enhanced Alpaca Client with Decomposed Architecture...")
     
     try:
         client = AlpacaClient(trader_name="Warren")
