@@ -15,8 +15,14 @@ from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 
-# Import trader strategies from AlpacaClient to avoid circular imports
-from core.alpaca_client import warren_strategy, ray_strategy, cathie_strategy
+# Import strategy system
+try:
+    from strategies import create_strategy, list_strategies
+    STRATEGY_SYSTEM_AVAILABLE = True
+except ImportError:
+    STRATEGY_SYSTEM_AVAILABLE = False
+    # Fallback to AlpacaClient strategies
+    from core.alpaca_client import warren_strategy, ray_strategy, cathie_strategy
 
 load_dotenv()
 
@@ -29,12 +35,13 @@ execute_real_orders = os.getenv("EXECUTE_REAL_ORDERS", "false").lower() == "true
 # Simple cache for trader clients
 _trader_clients = {}
 
-# Strategy mapping
-TRADER_STRATEGIES = {
-    "Warren": warren_strategy,
-    "Ray": ray_strategy,
-    "Cathie": cathie_strategy
-}
+# Strategy mapping (fallback only)
+if not STRATEGY_SYSTEM_AVAILABLE:
+    TRADER_STRATEGIES = {
+        "Warren": warren_strategy,
+        "Ray": ray_strategy,
+        "Cathie": cathie_strategy
+    }
 
 def get_trader_client(name: str) -> AlpacaClient:
     """Get or create trader-specific AlpacaClient"""
@@ -166,11 +173,17 @@ async def get_trading_status() -> Dict[str, Any]:
 async def get_strategy(name: str) -> str:
     """Get investment strategy for a trader"""
     try:
-        strategy = TRADER_STRATEGIES.get(name)
-        if strategy:
-            return strategy.strip()
+        if STRATEGY_SYSTEM_AVAILABLE:
+            # Use simple strategy system
+            strategy_obj = create_strategy(name)
+            return strategy_obj.get_instructions()
         else:
-            return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+            # Fallback to old system
+            strategy = TRADER_STRATEGIES.get(name)
+            if strategy:
+                return strategy.strip()
+            else:
+                return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
     except Exception as e:
         error_msg = f"❌ Strategy retrieval error: {str(e)}"
         write_log(name, "error", error_msg)
@@ -189,11 +202,20 @@ async def read_trader_resource(name: str) -> str:
 @mcp.resource("accounts://strategy/{name}")
 async def read_strategy_resource(name: str) -> str:
     """Get trader investment strategy as resource"""
-    strategy = TRADER_STRATEGIES.get(name)
-    if strategy:
-        return strategy.strip()
-    else:
-        return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+    try:
+        if STRATEGY_SYSTEM_AVAILABLE:
+            # Use simple strategy system
+            strategy_obj = create_strategy(name)
+            return strategy_obj.get_instructions()
+        else:
+            # Fallback to old system
+            strategy = TRADER_STRATEGIES.get(name)
+            if strategy:
+                return strategy.strip()
+            else:
+                return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+    except Exception as e:
+        return f"❌ Error loading strategy for {name}: {str(e)}"
 
 if __name__ == "__main__":
     print(f"🚀 Starting Accounts MCP Server")
