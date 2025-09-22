@@ -7,7 +7,7 @@ Consolidates all trading functionality in a single, clean interface.
 import os
 import sys
 import json
-from typing import Dict, Optional, List, Union, Tuple
+from typing import Dict, Optional, List, Union, Tuple, Any
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -21,6 +21,42 @@ from utils.database import write_log
 from core.risk_manager import RiskManager
 
 load_dotenv()
+
+# Strategy definitions (moved from utils.reset to avoid circular imports)
+warren_strategy = """
+You are Warren, and you are named in homage to your role model, Warren Buffett.
+You are a value-oriented investor who prioritizes long-term wealth creation.
+You identify high-quality companies trading below their intrinsic value.
+You invest patiently and hold positions through market fluctuations, 
+relying on meticulous fundamental analysis, steady cash flows, strong management teams, 
+and competitive advantages. You rarely react to short-term market movements, 
+trusting your deep research and value-driven strategy.
+"""
+
+ray_strategy = """
+You are Ray, and you are named in homage to your role model, Ray Dalio.
+You apply a systematic, principles-based approach rooted in macroeconomic insights and diversification. 
+You invest broadly across asset classes, utilizing risk parity strategies to achieve balanced returns 
+in varying market environments. You pay close attention to macroeconomic indicators, central bank policies, 
+and economic cycles, adjusting your portfolio strategically to manage risk and preserve capital across diverse market conditions.
+"""
+
+cathie_strategy = """
+You are Cathie, and you are named in homage to your role model, Cathie Wood.
+You aggressively pursue opportunities in disruptive innovation, particularly focusing on Crypto ETFs. 
+Your strategy is to identify and invest boldly in sectors poised to revolutionize the economy, 
+accepting higher volatility for potentially exceptional returns. You closely monitor technological breakthroughs, 
+regulatory changes, and market sentiment in crypto ETFs, ready to take bold positions 
+and actively manage your portfolio to capitalize on rapid growth trends.
+You focus your trading on crypto ETFs.
+"""
+
+# Strategy mapping for direct access
+TRADER_STRATEGIES = {
+    "Warren": warren_strategy,
+    "Ray": ray_strategy,
+    "Cathie": cathie_strategy
+}
 
 
 class AlpacaClient:
@@ -281,6 +317,42 @@ class AlpacaClient:
         except Exception as e:
             print(f"Error getting orders: {e}")
             return []
+    
+    # =============================================================================
+    # STRATEGY MANAGEMENT METHODS
+    # =============================================================================
+    
+    def get_strategy(self) -> str:
+        """Get investment strategy for this trader"""
+        try:
+            strategy = TRADER_STRATEGIES.get(self.trader_name)
+            if strategy:
+                return strategy.strip()
+            else:
+                return f"No strategy found for trader {self.trader_name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+        except Exception as e:
+            error_msg = f"❌ Strategy retrieval error: {str(e)}"
+            write_log(self.trader_name, "error", error_msg)
+            return error_msg
+    
+    def get_portfolio_summary(self) -> Dict[str, Any]:
+        """Get portfolio summary with positions and account data"""
+        try:
+            account_info = self.get_account_info()
+            positions = self.get_positions()
+            
+            return {
+                "trader": self.trader_name,
+                "cash": float(account_info.get('cash', 0)),
+                "portfolio_value": float(account_info.get('portfolio_value', 0)),
+                "buying_power": float(account_info.get('buying_power', 0)),
+                "positions_count": len(positions),
+                "positions": positions,
+                "paper_trading": self.paper_trading
+            }
+        except Exception as e:
+            write_log(self.trader_name, "error", f"Portfolio summary error: {str(e)}")
+            return {"error": str(e)}
     
     # =============================================================================
     # TRADING METHODS WITH RISK MANAGEMENT

@@ -15,8 +15,8 @@ from utils.database import write_log
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 
-# Import trader strategies
-from utils.reset import warren_strategy, ray_strategy, cathie_strategy
+# Import trader strategies from AlpacaClient to avoid circular imports
+from core.alpaca_client import warren_strategy, ray_strategy, cathie_strategy
 
 load_dotenv()
 

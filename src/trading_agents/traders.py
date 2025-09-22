@@ -1,5 +1,4 @@
 from contextlib import AsyncExitStack
-from accounts_client import read_accounts_resource, read_strategy_resource
 from trading_agents.tracers import make_trace_id
 from agents import Agent, Tool, Runner, OpenAIChatCompletionsModel, trace
 from openai import AsyncOpenAI
@@ -13,6 +12,7 @@ from trading_agents.templates import (
     trading_session_message,
 )
 from config.mcp_params import trader_mcp_server_params, researcher_mcp_server_params
+from core.alpaca_client import AlpacaClient
 
 load_dotenv(override=True)
 
@@ -69,6 +69,7 @@ class Trader:
         self.agent = None
         self.model_name = model_name
         self._strategy = None  # Cache strategy as identity
+        self.alpaca_client = AlpacaClient(paper_trading=True, trader_name=name)
 
     async def create_agent(self, trader_mcp_servers, researcher_mcp_servers) -> Agent:
         # Load strategy as identity (once)
@@ -88,23 +89,17 @@ class Trader:
     async def _load_strategy(self):
         """Load strategy as agent identity"""
         try:
-            return await read_strategy_resource(self.name)
+            return self.alpaca_client.get_strategy()
         except Exception as e:
             print(f"Strategy load failed for {self.name}: {e}")
             return f"Default investment strategy for {self.name}"
 
     async def get_account_report(self) -> str:
         # Use the portfolio summary tool which returns structured JSON data
-        from accounts_client import call_accounts_tool
         try:
-            result = await call_accounts_tool('get_portfolio_summary', {'name': self.name})
-            # Extract the JSON content from the MCP result
-            if hasattr(result, 'content') and result.content:
-                return result.content[0].text
-            elif hasattr(result, 'structuredContent'):
-                return json.dumps(result.structuredContent.get('result', {}))
-            else:
-                return json.dumps({})
+            result = self.alpaca_client.get_portfolio_summary()
+            # Return as JSON string for compatibility
+            return json.dumps(result)
         except Exception as e:
             print(f"Warning: Could not get portfolio summary for {self.name}: {e}")
             # Fallback to empty portfolio data
@@ -117,13 +112,9 @@ class Trader:
 
     async def get_trading_guidance(self) -> str:
         # Get trading guidance with risk limits and available funds
-        from accounts_client import call_accounts_tool
         try:
-            result = await call_accounts_tool('get_trading_guidance', {'name': self.name})
-            if hasattr(result, 'content') and result.content:
-                return result.content[0].text
-            else:
-                return "❌ Could not retrieve trading guidance"
+            result = self.alpaca_client.get_trading_guidance()
+            return result
         except Exception as e:
             print(f"Warning: Could not get trading guidance for {self.name}: {e}")
             return f"❌ Trading guidance unavailable: {e}"

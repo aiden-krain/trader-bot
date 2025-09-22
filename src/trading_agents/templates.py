@@ -144,7 +144,8 @@ EXECUTION GUIDELINES:
 - Stay within risk limits shown in trading guidance
 - Make decisive actions - don't over-analyze or loop endlessly
 
-PUSH NOTIFICATION (Include ALL details):
+MANDATORY PUSH NOTIFICATION (Include ALL details):
+- YOU MUST ALWAYS INCLUDE A PUSH NOTIFICATION AT THE END OF YOUR SESSION
 "Trading Session Complete - {name}
 
 TRADES EXECUTED:
