@@ -108,60 +108,74 @@ class TradingClient(BaseAlpacaClient):
     def assess_trade_risk(self, symbol: str, quantity: int, conviction_level: int = 5) -> Dict[str, Any]:
         """
         Pre-trade risk assessment with scoring and recommendations.
-        
-        Args:
-            symbol: Stock ticker symbol
-            quantity: Number of shares (positive for buy, negative for sell)
-            conviction_level: Trader's conviction level (1-10, 10 being highest)
-            
-        Returns:
-            Dictionary with risk assessment results
+        Now uses the optimized validate_trade method with return_assessment=True.
         """
         try:
-            # Get current price
+            # Get current price and portfolio data
             price = self.get_current_price(symbol)
-            
-            # Get portfolio value
             portfolio_value = self.get_portfolio_value()
-            
-            # Get filled orders today
             filled_orders_today = self.get_filled_orders_today()
             
-            # Perform risk assessment
-            assessment = self.risk_manager.assess_trade_risk(
-                symbol=symbol,
-                quantity=quantity,
-                price=price,
-                portfolio_value=portfolio_value,
-                conviction_level=conviction_level,
-                filled_orders_today=filled_orders_today
+            # Use enhanced validate_trade method for assessment
+            is_valid, message, assessment = self.risk_manager.validate_trade(
+                symbol, quantity, price, portfolio_value, filled_orders_today, 
+                conviction_level, return_assessment=True
             )
             
-            # Add trader name
+            # Add trader name and validation result
             assessment["trader"] = self.trader_name
+            assessment["validation_message"] = message
             
             return assessment
         except Exception as e:
             return {"error": f"Risk assessment error: {str(e)}"}
     
-    def buy_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
-        """Execute buy order with integrated risk management and logging"""
+    def buy_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str, conviction_level: int = 5) -> str:
+        """Execute buy order with enhanced risk management and logging"""
         try:
             # Input validation
             if quantity <= 0:
                 return "❌ Invalid quantity: must be positive"
             
-            # Get current price
-            price = self.get_current_price(symbol)
+            if not (1 <= conviction_level <= 10):
+                conviction_level = 5  # Default to medium conviction
             
-            # Risk management validation
+            # Get current price and portfolio data
+            price = self.get_current_price(symbol)
             portfolio_value = self.get_portfolio_value()
             today_trades = self.get_filled_orders_today()
             
-            is_valid, risk_message = self.risk_manager.validate_trade(symbol, quantity, price, portfolio_value, today_trades)
+            # Enhanced risk validation with detailed assessment
+            is_valid, risk_message, assessment = self.risk_manager.validate_trade(
+                symbol, quantity, price, portfolio_value, today_trades, 
+                conviction_level, return_assessment=True
+            )
+            
+            # Log the risk assessment
+            write_log(self.trader_name, "risk", f"Risk assessment for {symbol}: Score {assessment['risk_score']}, Level {assessment['risk_level']}")
+            
             if not is_valid:
-                write_log(self.trader_name, "risk", f"Buy order rejected: {risk_message}")
-                return f"❌ {risk_message}"
+                # Enhanced error message with risk context
+                error_msg = f"{risk_message} (Risk Score: {assessment['risk_score']}/100)"
+                write_log(self.trader_name, "risk", f"Buy order rejected: {error_msg}")
+                return f"❌ {error_msg}"
+            
+            # Show risk warnings if any (but don't block trade)
+            if assessment['warnings']:
+                warning_msg = " | ".join(assessment['warnings'])
+                write_log(self.trader_name, "risk", f"Risk warnings: {warning_msg}")
+                print(f"⚠️  {self.trader_name} Risk Warnings: {warning_msg}")
+            
+            # Show risk assessment for transparency
+            risk_emoji = {"very_low": "🟢", "low": "🟡", "moderate": "🟠", "high": "🔴", "very_high": "🚨"}
+            emoji = risk_emoji.get(assessment['risk_level'], "❓")
+            print(f"📊 {self.trader_name} Risk Assessment: {emoji} {assessment['risk_level']} (Score: {assessment['risk_score']}/100)")
+            
+            # Suggest better quantity if current one is risky but still valid
+            if assessment['risk_score'] > 60 and assessment['recommended_quantity'] < quantity:
+                suggestion = f"💡 Suggestion: Consider {assessment['recommended_quantity']} shares instead of {quantity} for lower risk"
+                print(suggestion)
+                write_log(self.trader_name, "risk", suggestion)
             
             # Check buying power
             from core.account_client import AccountClient
@@ -177,11 +191,12 @@ class TradingClient(BaseAlpacaClient):
             order_result = self.place_market_order(symbol, quantity, "buy")
             
             if order_result.get("success", False):
-                write_log(self.trader_name, "trading", f"✅ Buy {quantity} {symbol} at ${price:.2f} - {rationale}")
+                success_msg = f"✅ Buy {quantity} {symbol} at ${price:.2f} (Risk: {assessment['risk_level']}) - {rationale}"
+                write_log(self.trader_name, "trading", success_msg)
                 
                 # Get updated portfolio report
                 portfolio_report = account_client.get_portfolio_report()
-                return f"✅ Successfully bought {quantity} shares of {symbol} at ${price:.2f}\\n\\n{portfolio_report}"
+                return f"{success_msg}\n\n{portfolio_report}"
             else:
                 error_msg = order_result.get("error", "Unknown error")
                 write_log(self.trader_name, "error", f"❌ Buy order failed: {error_msg}")
@@ -191,12 +206,15 @@ class TradingClient(BaseAlpacaClient):
             write_log(self.trader_name, "error", f"❌ Buy order exception: {str(e)}")
             return f"❌ Error executing buy order: {str(e)}"
     
-    def sell_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
-        """Execute sell order with integrated risk management and logging"""
+    def sell_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str, conviction_level: int = 5) -> str:
+        """Execute sell order with enhanced risk management and logging"""
         try:
             # Input validation
             if quantity <= 0:
                 return "❌ Invalid quantity: must be positive"
+            
+            if not (1 <= conviction_level <= 10):
+                conviction_level = 5  # Default to medium conviction
             
             # Check if we have enough shares to sell
             from core.account_client import AccountClient
@@ -208,27 +226,41 @@ class TradingClient(BaseAlpacaClient):
                 available = float(current_position["qty"]) if current_position else 0
                 return f"❌ Insufficient shares: Need {quantity}, have {available} shares of {symbol}"
             
-            # Get current price
+            # Get current price and portfolio data
             price = self.get_current_price(symbol)
-            
-            # Risk management validation (mainly for daily limits)
             portfolio_value = self.get_portfolio_value()
             today_trades = self.get_filled_orders_today()
             
-            is_valid, risk_message = self.risk_manager.validate_trade(symbol, quantity, price, portfolio_value, today_trades)
+            # Enhanced risk validation with detailed assessment (mainly for daily limits)
+            is_valid, risk_message, assessment = self.risk_manager.validate_trade(
+                symbol, quantity, price, portfolio_value, today_trades, 
+                conviction_level, return_assessment=True
+            )
+            
+            # Log the risk assessment
+            write_log(self.trader_name, "risk", f"Sell risk assessment for {symbol}: Score {assessment['risk_score']}, Level {assessment['risk_level']}")
+            
             if not is_valid:
-                write_log(self.trader_name, "risk", f"Sell order rejected: {risk_message}")
-                return f"❌ {risk_message}"
+                # Enhanced error message with risk context
+                error_msg = f"{risk_message} (Risk Score: {assessment['risk_score']}/100)"
+                write_log(self.trader_name, "risk", f"Sell order rejected: {error_msg}")
+                return f"❌ {error_msg}"
+            
+            # Show risk assessment for transparency
+            risk_emoji = {"very_low": "🟢", "low": "🟡", "moderate": "🟠", "high": "🔴", "very_high": "🚨"}
+            emoji = risk_emoji.get(assessment['risk_level'], "❓")
+            print(f"📊 {self.trader_name} Sell Risk Assessment: {emoji} {assessment['risk_level']} (Score: {assessment['risk_score']}/100)")
             
             # Execute order
             order_result = self.place_market_order(symbol, quantity, "sell")
             
             if order_result.get("success", False):
-                write_log(self.trader_name, "trading", f"✅ Sell {quantity} {symbol} at ${price:.2f} - {rationale}")
+                success_msg = f"✅ Sell {quantity} {symbol} at ${price:.2f} (Risk: {assessment['risk_level']}) - {rationale}"
+                write_log(self.trader_name, "trading", success_msg)
                 
                 # Get updated portfolio report
                 portfolio_report = account_client.get_portfolio_report()
-                return f"✅ Successfully sold {quantity} shares of {symbol} at ${price:.2f}\\n\\n{portfolio_report}"
+                return f"{success_msg}\n\n{portfolio_report}"
             else:
                 error_msg = order_result.get("error", "Unknown error")
                 write_log(self.trader_name, "error", f"❌ Sell order failed: {error_msg}")

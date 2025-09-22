@@ -158,13 +158,13 @@ class AlpacaClient:
         """Place market order using modern alpaca-py"""
         return self.trading.place_market_order(symbol, qty, side)
     
-    def buy_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
-        """Execute buy order with integrated risk management and logging"""
-        return self.trading.buy_shares_with_risk_management(symbol, quantity, rationale)
+    def buy_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str, conviction_level: int = 5) -> str:
+        """Execute buy order with enhanced risk management and logging"""
+        return self.trading.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
     
-    def sell_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str) -> str:
-        """Execute sell order with integrated risk management and logging"""
-        return self.trading.sell_shares_with_risk_management(symbol, quantity, rationale)
+    def sell_shares_with_risk_management(self, symbol: str, quantity: int, rationale: str, conviction_level: int = 5) -> str:
+        """Execute sell order with enhanced risk management and logging"""
+        return self.trading.sell_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
     
     # =============================================================================
     # REPORTING & GUIDANCE METHODS
