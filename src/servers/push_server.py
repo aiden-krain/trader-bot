@@ -4,6 +4,9 @@ import requests
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 
+# Import structured response model
+from models import NotificationResult
+
 load_dotenv(override=True)
 
 pushover_user = os.getenv("PUSHOVER_USER")
@@ -19,12 +22,34 @@ class PushModelArgs(BaseModel):
 
 
 @mcp.tool()
-def push(args: PushModelArgs):
+def push(args: PushModelArgs) -> NotificationResult:
     """Send a push notification with this brief message"""
-    print(f"Push: {args.message}")
-    payload = {"user": pushover_user, "token": pushover_token, "message": args.message}
-    requests.post(pushover_url, data=payload)
-    return "Push notification sent"
+    try:
+        print(f"Push: {args.message}")
+        payload = {"user": pushover_user, "token": pushover_token, "message": args.message}
+        response = requests.post(pushover_url, data=payload)
+        
+        if response.status_code == 200:
+            return NotificationResult(
+                success=True,
+                message="Push notification sent successfully",
+                service="pushover",
+                timestamp=None
+            )
+        else:
+            return NotificationResult(
+                success=False,
+                message="Failed to send push notification",
+                service="pushover",
+                error=f"HTTP {response.status_code}: {response.text}"
+            )
+    except Exception as e:
+        return NotificationResult(
+            success=False,
+            message="Push notification failed",
+            service="pushover",
+            error=str(e)
+        )
 
 
 if __name__ == "__main__":

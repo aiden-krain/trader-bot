@@ -1,6 +1,7 @@
 """
 Alpaca MCP Server - Provides market data and trading tools via Model Context Protocol.
 This replaces the simulated market_server.py with real Alpaca financial data.
+Enhanced with structured Pydantic outputs for better AI agent integration.
 """
 
 import sys
@@ -12,6 +13,12 @@ from core.alpaca_client import AlpacaClient
 from typing import Dict, Any, List
 import asyncio
 import json
+
+# Import Pydantic models for structured responses
+from models import (
+    StockPrice, MarketStatus, Order, StockBars, PerformanceAnalysis, 
+    MarketMover, AssetValidation, AssetInfo, Bar, OrderList, TradeList, TradeInfo
+)
 
 mcp = FastMCP("Alpaca Market Data & Trading")
 
@@ -25,7 +32,7 @@ paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
 alpaca = AlpacaClient(paper_trading=paper_trading, trader_name="Warren")
 
 @mcp.tool()
-async def get_stock_price(symbol: str) -> Dict[str, Any]:
+async def get_stock_price(symbol: str) -> StockPrice:
     """
     Get current stock price for a symbol from Alpaca.
     
@@ -33,38 +40,62 @@ async def get_stock_price(symbol: str) -> Dict[str, Any]:
         symbol: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
     
     Returns:
-        Dict containing price, timestamp, and metadata
+        StockPrice model containing price, timestamp, and metadata
     """
     try:
         price = alpaca.get_real_price(symbol)
         quote = alpaca.get_quote(symbol)
         
         if price > 0:
-            return {
-                "symbol": symbol,
-                "price": price,
-                "bid": quote.get("bid"),
-                "ask": quote.get("ask"),
-                "spread": quote.get("ask", 0) - quote.get("bid", 0) if quote.get("ask") and quote.get("bid") else None,
-                "source": "alpaca",
-                "timestamp": quote.get("timestamp") or asyncio.get_event_loop().time(),
-                "paper_trading": paper_trading
-            }
+            return StockPrice(
+                symbol=symbol,
+                price=price,
+                bid=quote.get("bid"),
+                ask=quote.get("ask"),
+                spread=quote.get("ask", 0) - quote.get("bid", 0) if quote.get("ask") and quote.get("bid") else None,
+                source="alpaca",
+                timestamp=quote.get("timestamp") or asyncio.get_event_loop().time(),
+                paper_trading=paper_trading
+            )
         else:
-            return {"error": f"Could not get price for {symbol}"}
+            return StockPrice(
+                symbol=symbol,
+                price=0.0,
+                source="alpaca",
+                timestamp=asyncio.get_event_loop().time(),
+                paper_trading=paper_trading
+            )
     
     except Exception as e:
-        return {"error": f"Failed to get price for {symbol}: {str(e)}"}
+        return StockPrice(
+            symbol=symbol,
+            price=0.0,
+            source="alpaca",
+            timestamp=asyncio.get_event_loop().time(),
+            paper_trading=paper_trading
+        )
 
 @mcp.tool()
-async def get_market_status() -> Dict[str, Any]:
+async def get_market_status() -> MarketStatus:
     """
     Get current market status from Alpaca.
     
     Returns:
-        Dict containing market open/close status and hours
+        MarketStatus model containing market open/close status and hours
     """
-    return alpaca.get_market_status()
+    try:
+        status_data = alpaca.get_market_status()
+        return MarketStatus(
+            is_open=status_data.get("is_open", False),
+            next_open=status_data.get("next_open"),
+            next_close=status_data.get("next_close"),
+            timezone=status_data.get("timezone", "America/New_York")
+        )
+    except Exception as e:
+        return MarketStatus(
+            is_open=False,
+            timezone="America/New_York"
+        )
 
 @mcp.tool()
 async def get_market_account_info() -> Dict[str, Any]:
@@ -93,7 +124,7 @@ async def get_positions() -> List[Dict[str, Any]]:
     return positions
 
 @mcp.tool()
-async def get_recent_orders(limit: int = 20) -> List[Dict[str, Any]]:
+async def get_recent_orders(limit: int = 20) -> List[Order]:
     """
     Get recent order history from Alpaca.
     
@@ -101,17 +132,33 @@ async def get_recent_orders(limit: int = 20) -> List[Dict[str, Any]]:
         limit: Maximum number of orders to return (default 20)
     
     Returns:
-        List of recent orders with status and fill details
+        List of Order models with status and fill details
     """
-    orders = alpaca.get_orders(status='all', limit=limit)
-    # Add metadata to each order
-    for order in orders:
-        if isinstance(order, dict) and "error" not in order:
-            order["paper_trading"] = paper_trading
-    return orders
+    try:
+        orders_data = alpaca.get_orders(status='all', limit=limit)
+        orders = []
+        
+        for order_data in orders_data:
+            if isinstance(order_data, dict) and "error" not in order_data:
+                orders.append(Order(
+                    id=order_data.get('id'),
+                    symbol=order_data.get('symbol', ''),
+                    side=order_data.get('side', 'unknown'),
+                    qty=order_data.get('qty', 0),
+                    order_type=order_data.get('order_type', 'market'),
+                    limit_price=order_data.get('limit_price'),
+                    filled_qty=order_data.get('filled_qty'),
+                    filled_avg_price=order_data.get('filled_avg_price'),
+                    status=order_data.get('status'),
+                    paper_trading=paper_trading
+                ))
+        
+        return orders
+    except Exception as e:
+        return []
 
 @mcp.tool()
-async def search_stocks(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+async def search_stocks(query: str, limit: int = 10) -> List[AssetInfo]:
     """
     Search for tradeable stocks by symbol or company name.
     
@@ -120,7 +167,7 @@ async def search_stocks(query: str, limit: int = 10) -> List[Dict[str, Any]]:
         limit: Maximum number of results (default 10)
     
     Returns:
-        List of matching stocks with trading details
+        List of AssetInfo models with trading details
     """
     try:
         results = alpaca.search_assets(query, limit=limit)
@@ -130,22 +177,31 @@ async def search_stocks(query: str, limit: int = 10) -> List[Dict[str, Any]]:
         for asset in results:
             if isinstance(asset, dict) and "error" not in asset and asset.get("tradable", False):
                 # Add current price if available
+                current_price = None
                 try:
-                    current_price = alpaca.get_real_price(asset["symbol"])
-                    asset["current_price"] = current_price if current_price > 0 else None
+                    price = alpaca.get_real_price(asset["symbol"])
+                    current_price = price if price > 0 else None
                 except:
-                    asset["current_price"] = None
+                    pass
                 
-                asset["paper_trading"] = paper_trading
-                enhanced_results.append(asset)
+                enhanced_results.append(AssetInfo(
+                    symbol=asset["symbol"],
+                    name=asset.get("name"),
+                    exchange=asset.get("exchange"),
+                    tradable=asset.get("tradable", False),
+                    marginable=asset.get("marginable"),
+                    shortable=asset.get("shortable"),
+                    current_price=current_price,
+                    paper_trading=paper_trading
+                ))
         
         return enhanced_results
     
     except Exception as e:
-        return [{"error": f"Stock search failed: {str(e)}"}]
+        return []
 
 @mcp.tool()
-async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) -> Dict[str, Any]:
+async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) -> StockBars:
     """
     Get historical price bars/candles for technical analysis.
     
@@ -155,18 +211,47 @@ async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) 
         limit: Number of bars to retrieve (default 30)
     
     Returns:
-        Dict containing historical OHLCV data
+        StockBars model containing historical OHLCV data
     """
     try:
         bars_data = alpaca.get_bars(symbol, timeframe, limit=limit)
-        bars_data["paper_trading"] = paper_trading
-        return bars_data
+        
+        if "error" in bars_data:
+            return StockBars(
+                symbol=symbol,
+                timeframe=timeframe,
+                bars=[],
+                paper_trading=paper_trading
+            )
+        
+        bars = []
+        for bar_data in bars_data.get("bars", []):
+            bars.append(Bar(
+                timestamp=bar_data["timestamp"],
+                open=bar_data["open"],
+                high=bar_data["high"],
+                low=bar_data["low"],
+                close=bar_data["close"],
+                volume=bar_data["volume"]
+            ))
+        
+        return StockBars(
+            symbol=symbol,
+            timeframe=timeframe,
+            bars=bars,
+            paper_trading=paper_trading
+        )
     
     except Exception as e:
-        return {"symbol": symbol, "error": f"Failed to get bars: {str(e)}"}
+        return StockBars(
+            symbol=symbol,
+            timeframe=timeframe,
+            bars=[],
+            paper_trading=paper_trading
+        )
 
 @mcp.tool()
-async def analyze_stock_performance(symbol: str, days: int = 30) -> Dict[str, Any]:
+async def analyze_stock_performance(symbol: str, days: int = 30) -> PerformanceAnalysis:
     """
     Analyze stock performance over specified period.
     
@@ -175,18 +260,42 @@ async def analyze_stock_performance(symbol: str, days: int = 30) -> Dict[str, An
         days: Number of days to analyze (default 30)
     
     Returns:
-        Dict containing performance metrics and analysis
+        PerformanceAnalysis model containing performance metrics and analysis
     """
     try:
         # Get historical data
         bars_data = alpaca.get_bars(symbol, "1Day", limit=days)
         
         if "error" in bars_data:
-            return bars_data
+            return PerformanceAnalysis(
+                symbol=symbol,
+                period_days=0,
+                first_price=0.0,
+                last_price=0.0,
+                high_price=0.0,
+                low_price=0.0,
+                total_return_percent=0.0,
+                price_range_percent=0.0,
+                average_volume=0,
+                paper_trading=paper_trading,
+                analysis_timestamp=asyncio.get_event_loop().time()
+            )
         
         bars = bars_data.get("bars", [])
         if len(bars) < 2:
-            return {"symbol": symbol, "error": "Insufficient historical data"}
+            return PerformanceAnalysis(
+                symbol=symbol,
+                period_days=len(bars),
+                first_price=0.0,
+                last_price=0.0,
+                high_price=0.0,
+                low_price=0.0,
+                total_return_percent=0.0,
+                price_range_percent=0.0,
+                average_volume=0,
+                paper_trading=paper_trading,
+                analysis_timestamp=asyncio.get_event_loop().time()
+            )
         
         # Calculate performance metrics
         first_price = bars[0]["close"]
@@ -195,30 +304,41 @@ async def analyze_stock_performance(symbol: str, days: int = 30) -> Dict[str, An
         low_price = min(bar["low"] for bar in bars)
         
         total_return = ((last_price - first_price) / first_price) * 100
-        volatility = 0  # Simplified - would need proper volatility calculation
         
         # Calculate average volume
         avg_volume = sum(bar["volume"] for bar in bars) / len(bars)
         
-        return {
-            "symbol": symbol,
-            "period_days": len(bars),
-            "first_price": first_price,
-            "last_price": last_price,
-            "high_price": high_price,
-            "low_price": low_price,
-            "total_return_percent": round(total_return, 2),
-            "price_range_percent": round(((high_price - low_price) / first_price) * 100, 2),
-            "average_volume": int(avg_volume),
-            "paper_trading": paper_trading,
-            "analysis_timestamp": asyncio.get_event_loop().time()
-        }
+        return PerformanceAnalysis(
+            symbol=symbol,
+            period_days=len(bars),
+            first_price=first_price,
+            last_price=last_price,
+            high_price=high_price,
+            low_price=low_price,
+            total_return_percent=round(total_return, 2),
+            price_range_percent=round(((high_price - low_price) / first_price) * 100, 2),
+            average_volume=int(avg_volume),
+            paper_trading=paper_trading,
+            analysis_timestamp=asyncio.get_event_loop().time()
+        )
     
     except Exception as e:
-        return {"symbol": symbol, "error": f"Performance analysis failed: {str(e)}"}
+        return PerformanceAnalysis(
+            symbol=symbol,
+            period_days=0,
+            first_price=0.0,
+            last_price=0.0,
+            high_price=0.0,
+            low_price=0.0,
+            total_return_percent=0.0,
+            price_range_percent=0.0,
+            average_volume=0,
+            paper_trading=paper_trading,
+            analysis_timestamp=asyncio.get_event_loop().time()
+        )
 
 @mcp.tool()
-async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List[Dict[str, Any]]:
+async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List[MarketMover]:
     """
     Get top market movers (gainers or losers).
     Note: This is a simplified implementation as Alpaca doesn't provide direct screener API.
@@ -228,7 +348,7 @@ async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List
         limit: Number of stocks to return
     
     Returns:
-        List of top performing stocks (limited functionality with Alpaca free tier)
+        List of MarketMover models with top performing stocks
     """
     try:
         # This is a simplified implementation
@@ -246,103 +366,105 @@ async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List
                     current_close = bars[-1]["close"]
                     change_percent = ((current_close - prev_close) / prev_close) * 100
                     
-                    movers.append({
-                        "symbol": symbol,
-                        "current_price": current_close,
-                        "previous_close": prev_close,
-                        "change_percent": round(change_percent, 2),
-                        "change_dollar": round(current_close - prev_close, 2)
-                    })
+                    movers.append(MarketMover(
+                        symbol=symbol,
+                        current_price=current_close,
+                        previous_close=prev_close,
+                        change_percent=round(change_percent, 2),
+                        change_dollar=round(current_close - prev_close, 2),
+                        paper_trading=paper_trading
+                    ))
             except:
                 continue
         
         # Sort by change percentage
         if direction == "gainers":
-            movers.sort(key=lambda x: x["change_percent"], reverse=True)
+            movers.sort(key=lambda x: x.change_percent, reverse=True)
         else:
-            movers.sort(key=lambda x: x["change_percent"])
-        
-        # Add metadata
-        for mover in movers:
-            mover["paper_trading"] = paper_trading
+            movers.sort(key=lambda x: x.change_percent)
         
         return movers[:limit]
     
     except Exception as e:
-        return [{"error": f"Market movers query failed: {str(e)}"}]
+        return []
 
 @mcp.tool()
-async def get_current_orders() -> str:
+async def get_current_orders() -> OrderList:
     """Get all current open orders. Essential before making new trades."""
     try:
-        orders = alpaca.get_orders(status='open', limit=50)
+        orders_data = alpaca.get_orders(status='open', limit=50)
         
-        if not orders or (isinstance(orders, list) and len(orders) == 0):
-            return "No open orders."
+        orders = []
+        if orders_data and isinstance(orders_data, list):
+            for order_data in orders_data:
+                if isinstance(order_data, dict) and "error" not in order_data:
+                    orders.append(Order(
+                        id=order_data.get('id'),
+                        symbol=order_data.get('symbol', ''),
+                        side=order_data.get('side', 'unknown'),
+                        qty=order_data.get('qty', 0),
+                        order_type=order_data.get('order_type', 'market'),
+                        limit_price=order_data.get('limit_price'),
+                        filled_qty=order_data.get('filled_qty'),
+                        filled_avg_price=order_data.get('filled_avg_price'),
+                        status=order_data.get('status', 'open'),
+                        paper_trading=paper_trading
+                    ))
         
-        if isinstance(orders, dict) and "error" in orders:
-            return f"Error getting orders: {orders['error']}"
-        
-        result = "OPEN ORDERS:\n"
-        for order in orders:
-            if isinstance(order, dict) and "error" not in order:
-                side = order.get('side', 'UNKNOWN')
-                qty = order.get('qty', 'Unknown')
-                symbol = order.get('symbol', 'Unknown')
-                order_type = order.get('order_type', 'market')
-                limit_price = order.get('limit_price')
-                price_str = f"${limit_price}" if limit_price else "Market"
-                result += f"- {side} {qty} {symbol} at {price_str}\n"
-        
-        return result
+        return OrderList(
+            orders=orders,
+            total_count=len(orders),
+            status_filter="open",
+            paper_trading=paper_trading
+        )
         
     except Exception as e:
-        return f"Error getting orders: {str(e)}"
+        return OrderList(
+            orders=[],
+            total_count=0,
+            status_filter="open",
+            paper_trading=paper_trading
+        )
 
 @mcp.tool()
-async def get_recent_trades(days: int = 3) -> str:
+async def get_recent_trades(days: int = 3) -> TradeList:
     """Get recent completed trades to learn from performance."""
     try:
-        from datetime import datetime, timedelta
-        
         # Get filled orders from recent days
-        orders = alpaca.get_orders(status='filled', limit=20)
+        orders_data = alpaca.get_orders(status='filled', limit=20)
         
-        if not orders or (isinstance(orders, list) and len(orders) == 0):
-            return f"No trades in last {days} days."
+        trades = []
+        if orders_data and isinstance(orders_data, list):
+            for order_data in orders_data:
+                if isinstance(order_data, dict) and "error" not in order_data:
+                    filled_avg_price = order_data.get('filled_avg_price')
+                    if filled_avg_price:  # Only include actually filled orders
+                        trades.append(TradeInfo(
+                            symbol=order_data.get('symbol', ''),
+                            side=order_data.get('side', 'unknown'),
+                            quantity=order_data.get('filled_qty', order_data.get('qty', 0)),
+                            price=float(filled_avg_price),
+                            timestamp=order_data.get('filled_at'),
+                            order_id=order_data.get('id')
+                        ))
         
-        if isinstance(orders, dict) and "error" in orders:
-            return f"Error getting trades: {orders['error']}"
-        
-        # Filter to recent days (simplified - Alpaca API may handle this)
-        result = f"RECENT TRADES (Last {days} days):\n"
-        trade_count = 0
-        
-        for order in orders:
-            if isinstance(order, dict) and "error" not in order:
-                side = order.get('side', 'UNKNOWN')
-                filled_qty = order.get('filled_qty', order.get('qty', 'Unknown'))
-                symbol = order.get('symbol', 'Unknown')
-                filled_avg_price = order.get('filled_avg_price')
-                
-                if filled_avg_price:
-                    price_str = f"${float(filled_avg_price):.2f}"
-                else:
-                    price_str = "Unknown"
-                
-                result += f"- {side} {filled_qty} {symbol} at {price_str}\n"
-                trade_count += 1
-        
-        if trade_count == 0:
-            return f"No completed trades found in recent history."
-        
-        return result
+        return TradeList(
+            trades=trades,
+            total_count=len(trades),
+            period_days=days,
+            paper_trading=paper_trading
+        )
         
     except Exception as e:
-        return f"Error getting trades: {str(e)}"
+        return TradeList(
+            trades=[],
+            total_count=0,
+            period_days=days,
+            paper_trading=paper_trading
+        )
 
 @mcp.tool()
-async def validate_symbol(symbol: str) -> Dict[str, Any]:
+async def validate_symbol(symbol: str) -> AssetValidation:
     """
     Validate if a stock symbol is tradeable on Alpaca.
     
@@ -350,7 +472,7 @@ async def validate_symbol(symbol: str) -> Dict[str, Any]:
         symbol: Stock ticker symbol to validate
     
     Returns:
-        Dict containing validation result and asset details
+        AssetValidation model containing validation result and asset details
     """
     try:
         # Search for exact symbol match
@@ -359,30 +481,30 @@ async def validate_symbol(symbol: str) -> Dict[str, Any]:
         if assets and len(assets) > 0 and "error" not in assets[0]:
             asset = assets[0]
             if asset["symbol"].upper() == symbol.upper():
-                return {
-                    "symbol": symbol,
-                    "valid": True,
-                    "tradable": asset.get("tradable", False),
-                    "name": asset.get("name", ""),
-                    "exchange": asset.get("exchange", ""),
-                    "marginable": asset.get("marginable", False),
-                    "shortable": asset.get("shortable", False),
-                    "paper_trading": paper_trading
-                }
+                return AssetValidation(
+                    symbol=symbol,
+                    valid=True,
+                    tradable=asset.get("tradable", False),
+                    name=asset.get("name", ""),
+                    exchange=asset.get("exchange", ""),
+                    marginable=asset.get("marginable", False),
+                    shortable=asset.get("shortable", False),
+                    paper_trading=paper_trading
+                )
         
-        return {
-            "symbol": symbol,
-            "valid": False,
-            "paper_trading": paper_trading
-        }
+        return AssetValidation(
+            symbol=symbol,
+            valid=False,
+            paper_trading=paper_trading
+        )
     
     except Exception as e:
-        return {
-            "symbol": symbol,
-            "valid": False,
-            "error": str(e),
-            "paper_trading": paper_trading
-        }
+        return AssetValidation(
+            symbol=symbol,
+            valid=False,
+            paper_trading=paper_trading,
+            error=str(e)
+        )
 
 if __name__ == "__main__":
     print(f"Starting Alpaca MCP Server ({'Paper Trading' if paper_trading else 'Live Trading'})")
