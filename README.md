@@ -1,60 +1,321 @@
-## Master AI Agentic Engineering -  build autonomous AI Agents
+# AI Trading Bot - Production Ready System
 
-### 6 week journey to code and deploy AI Agents with OpenAI Agents SDK, CrewAI, LangGraph, AutoGen and MCP
+A sophisticated autonomous trading system powered by AI agents, real-time market data, and comprehensive risk management. This system has been transformed from an educational simulation into a production-ready trading platform using Alpaca's trading API.
 
-![Autonomous Agent](assets/autonomy.png)
+## 🚀 System Overview
 
-_If you're looking at this in Cursor, please right click on the filename in the Explorer on the left, and select "Open preview", to view the formatted version._
+This is a **production-ready AI trading system** that combines:
+- **Real market data** via Alpaca Trade API
+- **Dual AI models** (OpenAI + Anthropic) for diverse trading strategies
+- **Comprehensive market research** through Serper (Google) + Brave Search
+- **Risk management** with position limits and trade validation
+- **Model Context Protocol (MCP)** for agent communication
+- **Paper trading** safety with live trading capability
 
-I couldn't be more excited to welcome you! This is the start of your 6 week adventure into the powerful, astonishing and often surreal world of Agentic AI.
+## 🏗️ System Architecture & Data Flow
 
-### Before you begin
+### 📊 Architecture Overview
 
-I'm here to help you be most successful! Please do reach out if I can help, either in the platform or by emailing me direct (ed@edwarddonner.com). It's always great to connect with people on LinkedIn to build up the community - you'll find me here:  
-https://www.linkedin.com/in/eddonner/  
-And this is new to me, but I'm also trying out X/Twitter at [@edwarddonner](https://x.com/edwarddonner) - if you're on X, please show me how it's done 😂  
+The system follows a **modular, layered architecture** with clear separation of concerns:
 
-### The not-so-dreaded setup instructions
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    🚀 ORCHESTRATION LAYER                      │
+├─────────────────────────────────────────────────────────────────┤
+│  trading_floor.py  │  Creates traders, manages execution cycles │
+│  app.py           │  Gradio dashboard for monitoring/control   │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     🤖 AI AGENT LAYER                          │
+├─────────────────────────────────────────────────────────────────┤
+│  trading_agents/traders.py     │  Agent creation & execution    │
+│  trading_agents/templates.py   │  AI instruction templates      │
+│  trading_agents/tracers.py     │  Logging and tracing system    │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    🔧 MCP TOOLS LAYER                          │
+├─────────────────────────────────────────────────────────────────┤
+│  servers/accounts_server.py    │  Trading & account tools       │
+│  servers/alpaca_server.py      │  Market data tools             │
+│  servers/push_server.py        │  Notification tools            │
+│  config/mcp_params.py          │  MCP server configurations     │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   💼 CORE BUSINESS LAYER                       │
+├─────────────────────────────────────────────────────────────────┤
+│  core/alpaca_client.py         │  Main facade & orchestration   │
+│  core/trading_client.py        │  Risk-managed order execution  │
+│  core/account_client.py        │  Account & portfolio operations │
+│  core/market_data_client.py    │  Price & market data           │
+│  core/base_alpaca_client.py    │  Shared connection management   │
+│  core/risk_manager.py          │  Advanced risk assessment      │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   🎯 STRATEGY & CONFIG LAYER                   │
+├─────────────────────────────────────────────────────────────────┤
+│  strategies/strategies.py      │  Trading strategies (Warren,   │
+│  strategies/__init__.py        │  Ray, Cathie) with risk limits │
+│  utils/database.py             │  Logging and data persistence   │
+│  utils/util.py                 │  Helper functions               │
+└─────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     🌐 EXTERNAL APIS                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Alpaca Trading API            │  Live market data & execution  │
+│  OpenAI/Anthropic APIs         │  AI model inference            │
+│  Serper/Brave Search APIs      │  Market research & news        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-Perhaps famous last words: but I really, truly hope that I've put together an environment that will be not too horrific to set up!
+### 🔄 Data Flow Diagram
 
-- Windows people, your instructions are [here](setup/SETUP-PC.md)
-- Mac people, yours are [here](setup/SETUP-mac.md)
-- Linux people, yours are [here](setup/SETUP-linux.md)
+```
+1. STARTUP FLOW:
+   trading_floor.py
+   ├── Creates Trader instances (Warren, Ray, Cathie)
+   ├── Each Trader gets strategy from strategies/strategies.py
+   ├── AlpacaClient created with strategy-specific risk limits
+   └── MCP servers started (accounts_server.py, alpaca_server.py)
 
-Any problems, please do contact me.
+2. TRADING CYCLE FLOW:
+   Trader.run_trading_session()
+   ├── Templates generate AI instructions with strategy context
+   ├── Agent connects to MCP tools via mcp_params.py configuration
+   ├── Agent uses tools: get_account_info, get_stock_price, buy_shares
+   ├── MCP servers delegate to core clients:
+   │   ├── accounts_server.py → AlpacaClient → TradingClient
+   │   └── alpaca_server.py → AlpacaClient → MarketDataClient
+   ├── TradingClient applies enhanced risk assessment
+   ├── Risk-approved trades execute via Alpaca API
+   └── Results logged via database.py
 
-### Important notes for CrewAI week (Week 3)
+3. RISK MANAGEMENT FLOW:
+   buy_shares_with_risk_management()
+   ├── TradingClient.buy_shares_with_risk_management()
+   ├── RiskManager.validate_trade(return_assessment=True)
+   ├── Conviction-based position sizing (1-10 scale)
+   ├── Real-time risk feedback (🟢🟡🟠🔴🚨)
+   ├── Smart warnings and suggestions
+   └── Trade execution or rejection with detailed feedback
+```
 
-Windows PC users: you will need to have checked the "gotcha #4" at the top of the [SETUP-PC](setup/SETUP-PC.md) instructions -- installing Microsoft Build Tools.  
-If you don't do this, then CrewAI will fail with an obscure error involving Chroma..
+### 🏗️ Core Components
 
+```
+src/
+├── trading_agents/     # 🤖 AI Agent Layer
+│   ├── traders.py      # Agent creation, MCP integration, execution
+│   ├── templates.py    # Strategy-aware AI instruction templates
+│   └── tracers.py      # Comprehensive logging and tracing
+├── core/              # 💼 Core Business Layer
+│   ├── alpaca_client.py        # Main facade with strategy integration
+│   ├── trading_client.py       # Enhanced risk-managed trading
+│   ├── account_client.py       # Account & portfolio operations
+│   ├── market_data_client.py   # Real-time market data
+│   ├── base_alpaca_client.py   # Shared connection management
+│   └── risk_manager.py         # Advanced risk assessment system
+├── servers/           # 🔧 MCP Tools Layer
+│   ├── accounts_server.py      # Trading & account MCP tools
+│   ├── alpaca_server.py        # Market data MCP tools
+│   └── push_server.py          # Notification MCP tools
+├── strategies/        # 🎯 Strategy Layer
+│   ├── strategies.py           # Warren, Ray, Cathie strategies
+│   └── __init__.py            # Strategy factory and registry
+├── config/            # ⚙️ Configuration
+│   └── mcp_params.py          # MCP server configurations
+├── utils/             # 🛠️ Utilities
+│   ├── database.py            # Logging and data persistence
+│   └── util.py                # Helper functions and utilities
+├── app.py            # 📊 Web Dashboard
+└── trading_floor.py  # 🚀 Main Orchestrator
+```
 
-Then, you will need to run this command in a Cursor Terminal in the project root directory in order to run the Crew commands:  
-`uv tool install crewai`   
-And in case you've used Crew before, it might be worth doing this to make sure you have the latest:  
-`uv tool upgrade crewai`  
+### 🔧 Component Integration
 
-Then please keep in mind for Crew:
+**Strategy → Client Integration:**
+```python
+# strategies/strategies.py defines Warren strategy
+warren_strategy = Warren(max_position_size=1500)
+risk_limits = warren_strategy.get_risk_limits()
 
-1. There are two ways that you can work on the CrewAI project in week 3. Either review the code for each project while I build it, and then do `crewai run` to see it in action. Or if you prefer to be more hands-on, then create your own Crew project from scratch to mirror mine; for example, create `my_debate` to go alongside `debate`, and write the code alongside me. Either approach works!  
-2. Windows users: there's a new issue that was recently introduced by one of Crew's libraries. Until this is fixed, you might get a "unicode" error when you try to run `crewai create crew`.  If that happens, please try running this command in the Terminal first: `$env:PYTHONUTF8 = "1"`  
-3. Gemini users: in addition to a key in your `.env` file for `GOOGLE_API_KEY`, you will need an identical key for `GEMINI_API_KEY`
+# core/alpaca_client.py integrates strategy
+client = AlpacaClient(trader_name="Warren")  # Auto-loads Warren strategy
+client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
+```
 
-### Super useful resources
+**MCP Tools → Core Integration:**
+```python
+# servers/accounts_server.py exposes buy_shares tool
+@mcp.tool()
+async def buy_shares(symbol, quantity, rationale, conviction_level=5):
+    client = get_trader_client("Warren")  # Gets AlpacaClient
+    return client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
 
-- The course [resources](https://edwarddonner.com/2025/04/21/the-complete-agentic-ai-engineering-course/) with videos
-- Many essential guides in the [guides](guides/01_intro.ipynb) section
-- The [troubleshooting](setup/troubleshooting.ipynb) notebook
+# core/trading_client.py handles execution with risk assessment
+def buy_shares_with_risk_management(self, symbol, quantity, rationale, conviction_level=5):
+    assessment = self.risk_manager.validate_trade(..., return_assessment=True)
+    # Real-time risk feedback: 📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
+```
 
-### API costs - please read me!
+## 📊 Features
 
-This course does involve making calls to OpenAI and other frontier models, requiring an API key and a small spend, which we set up in the SETUP instructions. If you'd prefer not to spend on API calls, there are cheaper alternatives like DeepSeek and free alternatives like using Ollama!
+### ✅ Production Trading Capabilities
+- **Real Market Data**: Live prices and market status via Alpaca
+- **Paper Trading**: Safe simulation environment with real data
+- **Live Trading**: Production capability (disabled by default)
+- **Modular Architecture**: Specialized clients for market data, accounts, and trading
 
-Details are [here](guides/09_ai_apis_and_ollama.ipynb).
+### ✅ AI-Powered Decision Making
+- **Dual AI Models**: OpenAI GPT + Anthropic Claude for diverse strategies
+- **Strategy Framework**: Injectable Warren, Ray, and Cathie strategies
+- **Market Research**: Comprehensive news and sentiment analysis
+- **Autonomous Trading**: Fully automated decision making and execution
 
-Be sure to monitor your API costs to ensure you are totally happy with any spend. For OpenAI, the dashboard is [here](https://platform.openai.com/usage).
+### ✅ Advanced Risk Management System
+- **Enhanced Risk Scoring**: 0-100 risk scores with five intuitive levels (🟢🟡🟠🔴🚨)
+- **Conviction-Based Trading**: Dynamic position sizing based on confidence (1-10 scale)
+- **Pre-Trade Assessment**: Detailed risk analysis before execution
+- **Real-Time Feedback**: Color-coded risk levels and smart suggestions
+- **Intelligent Warnings**: Specific, actionable alerts with position recommendations
+- **Performance Optimized**: Single-pass risk calculation for efficiency
 
-### ABOVE ALL ELSE -
+### ✅ Comprehensive Research
+- **Dual Search**: Serper (Google Search) + Brave Search APIs
+- **News Analysis**: Real-time market news and sentiment
+- **Technical Analysis**: Market data analysis and trend identification
+- **Persistent Memory**: Research continuity across trading sessions
 
-Be sure to have fun with the course! You could not have picked a better time to be learning about Agentic AI. I hope you enjoy every single minute! And if you get stuck at any point - [contact me](https://www.linkedin.com/in/eddonner/).
+### ✅ Safety & Monitoring
+- **Position Limits**: Strategy-specific maximum position sizes
+- **Daily Limits**: Configurable maximum trades per day
+- **Portfolio Risk**: Percentage-based portfolio risk controls
+- **Complete Logging**: Comprehensive audit trail and decision tracking
+- **Web Dashboard**: Real-time monitoring via Gradio interface
+
+## 🔧 Setup & Installation
+
+### Prerequisites
+- Python 3.11+
+- `uv` package manager (recommended) or `pip`
+- Alpaca trading account (paper trading by default)
+- API keys for AI models and search services
+
+### Installation
+
+1. **Clone and install dependencies:**
+   ```bash
+   git clone <repository>
+   cd trader-bot
+   uv sync  # or pip install -r requirements.txt
+   ```
+
+2. **Configure environment variables:**
+   Create a `.env` file with:
+   ```env
+   # Trading API
+   ALPACA_KEY=your_alpaca_key
+   ALPACA_SECRET=your_alpaca_secret
+   ALPACA_PAPER_TRADING=true
+   EXECUTE_REAL_ORDERS=false
+   
+   # AI Models
+   OPENAI_API_KEY=your_openai_key
+   ANTHROPIC_API_KEY=your_anthropic_key
+   
+   # Market Research
+   SERPER_API_KEY=your_serper_key
+   BRAVE_API_KEY=your_brave_key
+   ```
+
+3. **Run system tests:**
+   ```bash
+   cd src && uv run test_system.py
+   ```
+
+## 🚀 Usage
+
+### Web Dashboard
+Launch the Gradio web interface for monitoring:
+```bash
+cd src && uv run app.py
+```
+
+### Trading Floor
+Run the main trading system:
+```bash
+cd src && uv run trading_floor.py
+```
+
+### MCP Servers
+Start individual MCP servers for development/testing:
+```bash
+# Market data server
+cd src/servers && uv run alpaca_server.py
+
+# Trading execution server  
+cd src/servers && uv run accounts_server.py
+```
+
+## 🔒 Safety & Risk Management
+
+### Default Safety Settings
+- **Paper Trading**: Enabled by default (no real money)
+- **Real Orders**: Disabled by default
+- **Position Limits**: $1,000 maximum per position
+- **Daily Limits**: 10 trades maximum per day
+- **Portfolio Risk**: 2% maximum portfolio risk
+
+### Enhanced Risk Controls
+- **Pre-trade Assessment**: Detailed risk analysis with scoring and recommendations
+- **Conviction-Based Sizing**: Position sizes adjust based on trader confidence
+- **Real-Time Feedback**: Live risk assessment during trading execution
+- **Smart Warnings**: Actionable alerts when approaching risk limits
+- **Account Synchronization**: Real-time balance and position tracking
+- **Complete Audit Trail**: Comprehensive transaction and decision logging
+
+### Risk Management Examples
+```bash
+# Example risk assessment output during trading:
+📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
+⚠️  Risk Warnings: Position size ($1,400) is 93.3% of your limit
+💡 Suggestion: Consider 6 shares instead of 8 for lower risk
+✅ Buy 6 AAPL at $175.00 (Risk: low) - Strong earnings outlook
+
+# Conviction-based position sizing:
+Conviction 3/10: Recommends 3 shares ($525) - Conservative approach
+Conviction 8/10: Recommends 6 shares ($1,050) - High confidence trade
+Conviction 10/10: Recommends 7 shares ($1,225) - Maximum conviction
+```
+
+## ⚠️ Important Warnings
+
+### Financial Risk
+- **Paper Trading**: Use paper trading for testing and development
+- **Real Money**: Only enable live trading after thorough testing
+- **Position Limits**: Configure appropriate risk limits
+- **Monitoring**: Always monitor system behavior
+
+### API Costs
+- **AI Models**: OpenAI and Anthropic charge per API call
+- **Search APIs**: Serper and Brave have usage limits
+- **Monitoring**: Track API usage and costs
+
+## 📄 Disclaimer
+
+This software is for educational and research purposes. Trading involves financial risk. Users are responsible for their own trading decisions and any financial outcomes. Always test thoroughly with paper trading before considering real money trading.
+
+---
+
+**🎯 Sophisticated AI Trading Platform with Advanced Risk Management**
+
+*Production-ready system featuring modular architecture, conviction-based trading, and real-time risk assessment*
