@@ -1,10 +1,19 @@
 [build]
 builder = "nixpacks"
 
+[build.nixpacksConfig]
+# Use uv for faster, more reliable dependency installation
+install = """
+pip install uv
+uv pip install --system numpy>=1.24.0
+uv pip install --system pandas>=2.0.0
+uv pip install --system -r requirements.txt
+"""
+
 [deploy]
-startCommand = "cd src && uv run combined_app.py"
+startCommand = "cd src && PYTHONPATH=/app/src python combined_app.py"
 restartPolicyType = "always"
 restartPolicyMaxRetries = 10
 
 [environments.production]
-variables = {}
+variables = { PYTHONPATH = "/app/src" }

@@ -5,8 +5,7 @@ import requests
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 
-# Add src to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Push server for notifications
 
 # Import structured response model
 from models import NotificationResult
