@@ -11,8 +11,8 @@ from utils.util import css, js, Color
 import pandas as pd
 from trading_floor import names, lastnames, short_model_names
 import plotly.express as px
-from core.alpaca_client import AlpacaClient
 from utils.database import read_log
+from trading_agents.traders import Trader
 import json
 from datetime import datetime
 import os
@@ -60,56 +60,41 @@ mapper = {
     "account": Color.RED,
 }
 
-class Trader:
-    # Class-level cache for shared clients
-    _client_cache = {}
+class TraderView:
+    """UI wrapper for Trader class - handles dashboard display logic"""
     
-    def __init__(self, name: str, lastname: str, model_name: str):
-        self.name = name
-        self.lastname = lastname
-        self.model_name = model_name
-        self.account_data = None
-        self.positions = []
-        
-        # Use cached client if available, otherwise create new one
-        if name not in self._client_cache:
-            self._client_cache[name] = AlpacaClient(paper_trading=True, trader_name=name)
-        
-        self.alpaca_client = self._client_cache[name]
-        self.reload()
-
-    def reload(self):
-        """Refresh account data from Alpaca API"""
-        try:
-            self.account_data = self.alpaca_client.get_account_info()
-            self.positions = self.alpaca_client.get_positions()
-        except Exception as e:
-            print(f"Error loading account data for {self.name}: {e}")
-            self.account_data = {"portfolio_value": 0, "cash": 0}
-            self.positions = []
+    def __init__(self, trader: Trader):
+        self.trader = trader
+        self.name = trader.name
+        self.lastname = trader.lastname
+        self.model_name = trader.model_name
 
     def get_title(self) -> str:
+        """Get formatted title for dashboard display"""
         return f"<div style='text-align: center;font-size:34px;'>{self.name}<span style='color:#ccc;font-size:24px;'> ({self.model_name}) - {self.lastname}</span></div>"
 
     def get_account_info(self) -> str:
-        if not self.account_data:
+        """Get formatted account info for dashboard display"""
+        if not hasattr(self.trader, 'account_data') or not self.trader.account_data:
             return "No account data available"
         
-        portfolio_value = float(self.account_data.get("portfolio_value", 0))
-        cash = float(self.account_data.get("cash", 0))
+        portfolio_value = float(self.trader.account_data.get("portfolio_value", 0))
+        cash = float(self.trader.account_data.get("cash", 0))
         
         return f"""
         **Portfolio Value:** ${portfolio_value:,.2f}
         **Cash:** ${cash:,.2f}
-        **Positions:** {len(self.positions)}
+        **Positions:** {len(getattr(self.trader, 'positions', []))}
         """
 
     def get_positions_df(self) -> pd.DataFrame:
-        if not self.positions:
+        """Get positions as DataFrame for dashboard display"""
+        positions = getattr(self.trader, 'positions', [])
+        if not positions:
             return pd.DataFrame(columns=["Symbol", "Quantity", "Market Value", "Unrealized P&L"])
         
         positions_data = []
-        for pos in self.positions:
+        for pos in positions:
             positions_data.append({
                 "Symbol": pos.get("symbol", ""),
                 "Quantity": float(pos.get("qty", 0)),
@@ -119,8 +104,14 @@ class Trader:
         
         return pd.DataFrame(positions_data)
 
-# Create trader instances
+    def reload(self):
+        """Refresh trader data"""
+        if hasattr(self.trader, 'reload'):
+            self.trader.reload()
+
+# Create trader instances and their UI wrappers
 traders = [Trader(name, lastname, model) for name, lastname, model in zip(names, lastnames, short_model_names)]
+trader_views = [TraderView(trader) for trader in traders]
 
 def get_trading_status():
     """Get current trading bot status"""
@@ -197,22 +188,22 @@ with gr.Blocks(css=css, js=js, title="AI Trading Bot Dashboard") as demo:
     # Traders Section
     with gr.Tabs():
         # Individual trader tabs
-        for i, trader in enumerate(traders):
-            with gr.TabItem(f"{trader.name} ({trader.model_name})"):
-                gr.HTML(trader.get_title())
+        for i, trader_view in enumerate(trader_views):
+            with gr.TabItem(f"{trader_view.name} ({trader_view.model_name})"):
+                gr.HTML(trader_view.get_title())
                 
                 with gr.Row():
                     with gr.Column(scale=1):
-                        account_info = gr.Markdown(trader.get_account_info())
+                        account_info = gr.Markdown(trader_view.get_account_info())
                     with gr.Column(scale=2):
                         positions_df = gr.Dataframe(
-                            value=trader.get_positions_df(),
+                            value=trader_view.get_positions_df(),
                             headers=["Symbol", "Quantity", "Market Value", "Unrealized P&L"]
                         )
                 
-                refresh_btn = gr.Button(f"🔄 Refresh {trader.name}'s Data", variant="primary")
+                refresh_btn = gr.Button(f"🔄 Refresh {trader_view.name}'s Data", variant="primary")
                 refresh_btn.click(
-                    fn=lambda t=trader: (t.reload(), t.get_account_info(), t.get_positions_df())[1:],
+                    fn=lambda tv=trader_view: (tv.reload(), tv.get_account_info(), tv.get_positions_df())[1:],
                     outputs=[account_info, positions_df]
                 )
         

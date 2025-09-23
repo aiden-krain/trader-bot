@@ -1,8 +1,12 @@
 import os
+import sys
 from dotenv import load_dotenv
 import requests
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
+
+# Add src to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import structured response model
 from models import NotificationResult

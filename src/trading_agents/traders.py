@@ -63,13 +63,24 @@ async def get_researcher_tool(mcp_servers, model_name) -> Tool:
 
 
 class Trader:
+    # Class-level cache for shared AlpacaClient instances
+    _client_cache = {}
+    
     def __init__(self, name: str, lastname="Trader", model_name="gpt-4o-mini"):
         self.name = name
         self.lastname = lastname
         self.agent = None
         self.model_name = model_name
         self._strategy = None  # Cache strategy as identity
-        self.alpaca_client = AlpacaClient(paper_trading=True, trader_name=name)
+        
+        # Use cached client if available, otherwise create new one
+        if name not in self._client_cache:
+            self._client_cache[name] = AlpacaClient(paper_trading=True, trader_name=name)
+        
+        self.alpaca_client = self._client_cache[name]
+        
+        # Initialize dashboard data attributes
+        self.__init_dashboard_data()
 
     async def create_agent(self, trader_mcp_servers, researcher_mcp_servers) -> Agent:
         # Load strategy as identity (once)
@@ -93,6 +104,24 @@ class Trader:
         except Exception as e:
             print(f"Strategy load failed for {self.name}: {e}")
             return f"Default investment strategy for {self.name}"
+    
+    def reload(self):
+        """Refresh account data from Alpaca API (for dashboard compatibility)"""
+        try:
+            self.account_data = self.alpaca_client.get_account_info()
+            self.positions = self.alpaca_client.get_positions()
+        except Exception as e:
+            print(f"Failed to reload data for {self.name}: {e}")
+            self.account_data = {}
+            self.positions = []
+    
+    def __init_dashboard_data(self):
+        """Initialize dashboard-specific data attributes"""
+        self.account_data = None
+        self.positions = []
+        # Always reload to get fresh data - connection logging is already deduplicated
+        self.reload()
+    
 
     async def get_account_report(self) -> str:
         # Use the portfolio summary tool which returns structured JSON data

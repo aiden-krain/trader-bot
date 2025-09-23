@@ -68,8 +68,14 @@ class AlpacaClient:
     
     def _display_risk_summary(self):
         """Display a clean summary of risk limits for this trader"""
-        risk_summary = self.risk_manager.get_risk_summary()
-        print(f"   🛡️  Risk Limits: Max Position {risk_summary['max_position_size']} | Portfolio Risk {risk_summary['max_portfolio_risk']} | Daily Trades {risk_summary['max_daily_trades']}")
+        # Import the module-level tracker from base client
+        from core.base_alpaca_client import _logged_traders
+        
+        risk_key = f"risk_{self.trader_name}_{self.paper_trading}"
+        if risk_key not in _logged_traders:
+            risk_summary = self.risk_manager.get_risk_summary()
+            print(f"   🛡️  Risk Limits: Max Position {risk_summary['max_position_size']} | Portfolio Risk {risk_summary['max_portfolio_risk']} | Daily Trades {risk_summary['max_daily_trades']}")
+            _logged_traders.add(risk_key)
     
     # =============================================================================
     # MARKET DATA METHODS

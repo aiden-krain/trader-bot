@@ -6,6 +6,8 @@ Enhanced with structured Pydantic outputs for better AI agent integration.
 
 import sys
 import os
+
+# Add src to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
