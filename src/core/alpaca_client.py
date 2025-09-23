@@ -12,9 +12,7 @@ from typing import Dict, Any, List, Tuple, Optional, Union
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-# Modern alpaca-py imports
-from alpaca.trading.client import TradingClient
-from alpaca.data.historical.stock import StockHistoricalDataClient
+# Alpaca clients are used implicitly through base_alpaca_client.py
 
 # Add utils path for database operations
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
