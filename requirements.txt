@@ -1,3 +1,6 @@
+# Package Manager
+uv>=0.8.17
+
 # Core AI Providers (Production Only)
 openai>=1.68.2
 anthropic>=0.40.0
