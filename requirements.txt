@@ -1,6 +1,10 @@
 # Package Manager
 uv>=0.8.17
 
+# Core Dependencies (install first to avoid conflicts)
+numpy>=1.24.0
+pandas>=2.0.0
+
 # Core AI Providers (Production Only)
 openai>=1.68.2
 anthropic>=0.40.0
@@ -21,7 +25,6 @@ httpx>=0.28.1
 # Dashboard & Monitoring
 gradio>=5.0.0
 plotly>=6.0.1
-pandas>=2.0.0
 
 # Utilities
 psutil>=7.0.0

@@ -2,7 +2,7 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "cd src && python combined_app.py"
+startCommand = "cd src && uv run combined_app.py"
 restartPolicyType = "always"
 restartPolicyMaxRetries = 10
 
