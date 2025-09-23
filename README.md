@@ -42,6 +42,7 @@ The system follows a **modular, layered architecture** with clear separation of 
 │  servers/accounts_server.py    │  Trading & account tools       │
 │  servers/alpaca_server.py      │  Market data tools             │
 │  servers/push_server.py        │  Notification tools            │
+│  models/ (Pydantic schemas)    │  Type-safe structured outputs  │
 │  config/mcp_params.py          │  MCP server configurations     │
 └─────────────────────────────────────────────────────────────────┘
                                     │
@@ -128,6 +129,11 @@ src/
 │   ├── accounts_server.py      # Trading & account MCP tools
 │   ├── alpaca_server.py        # Market data MCP tools
 │   └── push_server.py          # Notification MCP tools
+├── models/            # 📡 Pydantic Data Models
+│   ├── account_models.py       # Account & portfolio structured outputs
+│   ├── market_models.py        # Market data structured outputs
+│   ├── trading_models.py       # Trading & risk structured outputs
+│   └── notification_models.py  # Notification structured outputs
 ├── strategies/        # 🎯 Strategy Layer
 │   ├── strategies.py           # Warren, Ray, Cathie strategies
 │   └── __init__.py            # Strategy factory and registry
@@ -153,17 +159,24 @@ client = AlpacaClient(trader_name="Warren")  # Auto-loads Warren strategy
 client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
 ```
 
-**MCP Tools → Core Integration:**
+**MCP Tools → Core Integration with Structured Outputs:**
 ```python
-# servers/accounts_server.py exposes buy_shares tool
+# servers/accounts_server.py exposes buy_shares tool with Pydantic response
 @mcp.tool()
-async def buy_shares(symbol, quantity, rationale, conviction_level=5):
+async def buy_shares(symbol, quantity, rationale, conviction_level=5) -> TradeResult:
     client = get_trader_client("Warren")  # Gets AlpacaClient
-    return client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
+    result = client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
+    return TradeResult(
+        success=result.success,
+        message=result.message,
+        trade_details=result.trade_details,
+        risk_assessment=result.risk_assessment
+    )
 
 # core/trading_client.py handles execution with risk assessment
 def buy_shares_with_risk_management(self, symbol, quantity, rationale, conviction_level=5):
     assessment = self.risk_manager.validate_trade(..., return_assessment=True)
+    # Returns structured RiskAssessment model with type safety
     # Real-time risk feedback: 📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
 ```
 
@@ -180,6 +193,7 @@ def buy_shares_with_risk_management(self, symbol, quantity, rationale, convictio
 - **Strategy Framework**: Injectable Warren, Ray, and Cathie strategies
 - **Market Research**: Comprehensive news and sentiment analysis
 - **Autonomous Trading**: Fully automated decision making and execution
+- **Structured Data**: Type-safe Pydantic models for all tool responses
 
 ### ✅ Advanced Risk Management System
 - **Enhanced Risk Scoring**: 0-100 risk scores with five intuitive levels (🟢🟡🟠🔴🚨)

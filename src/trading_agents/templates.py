@@ -66,9 +66,6 @@ MANDATORY WORKFLOW:
 4. Research + analyze opportunities
 5. Execute with conviction OR hold
 
-
-
-
 YOUR INVESTMENT STRATEGY (Core Identity):
 {strategy}
 

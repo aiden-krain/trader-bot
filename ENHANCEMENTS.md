@@ -181,6 +181,37 @@ This document outlines planned enhancements and improvements to the Trader Bot s
 - Add support for dollar-based stop losses and take profits
 - Create fractional share compatibility across all trading tools and MCP servers
 
+## 11. Clean Up Trading Agent Templates
+
+**Current Implementation:**
+- `trader_instructions()` and `trading_session_message()` functions in `src/trading_agents/templates.py`
+- Some overlap and redundancy between the two template functions
+- Mixed concerns: identity/strategy vs. session-specific instructions
+- Both functions contain trading workflow and principles
+
+**Identified Issues:**
+- `trader_instructions()` contains both identity/strategy AND workflow instructions
+- `trading_session_message()` duplicates some trading principles from trader_instructions
+- Unclear separation of what each template should be responsible for
+- Redundant information makes prompts longer and potentially confusing
+
+**Planned Enhancements:**
+- **Separate Identity from Session**: `trader_instructions()` should focus on trader identity, strategy, and core philosophy
+- **Session-Specific Focus**: `trading_session_message()` should focus on current session workflow and immediate actions
+- **Remove Redundancy**: Eliminate duplicate trading principles and workflow instructions
+- **Clear Responsibility Separation**:
+  - `trader_instructions()`: Who you are, your strategy, your core principles (static identity)
+  - `trading_session_message()`: What to do right now, current session context (dynamic session)
+- **Streamline Content**: Make each template more focused and concise
+- **Improve Agent Clarity**: Clearer separation should improve agent understanding and performance
+
+**Benefits:**
+- Cleaner, more focused prompts for better agent performance
+- Easier maintenance and updates to specific aspects
+- Reduced token usage through elimination of redundancy
+- Better separation of concerns in the template system
+- More predictable agent behavior with clearer instructions
+
 ## Implementation Priority
 
 ### ✅ Completed (High Priority)
@@ -188,14 +219,15 @@ This document outlines planned enhancements and improvements to the Trader Bot s
 2. ✅ **Simplification of tools and risk checking** - Completed with enhanced risk assessment system
 
 ### 🚀 Next Priority (In Progress/Planned)
-3. **Adding cryptocurrency trading support** - Expand beyond stock trading
-4. **Advanced order types support** - Limit orders, stop losses, trailing stops
-5. **Understand reset.py and integrate better into system** - Legacy code analysis and integration
-6. **UI graph improvements** - Portfolio visualization and performance tracking
-7. **Enhanced market research tools** - Social sentiment, technical analysis
-8. **Improved trading guidelines** - Comprehensive trading documentation
-9. **Improve database logging with better information** - Enhanced structured logging and analytics
-10. **Implement fractional buying of shares** - Precise dollar-based position sizing
+3. **Clean up trading agent templates** - Separate identity from session instructions
+4. **Adding cryptocurrency trading support** - Expand beyond stock trading
+5. **Advanced order types support** - Limit orders, stop losses, trailing stops
+6. **Understand reset.py and integrate better into system** - Legacy code analysis and integration
+7. **UI graph improvements** - Portfolio visualization and performance tracking
+8. **Enhanced market research tools** - Social sentiment, technical analysis
+9. **Improved trading guidelines** - Comprehensive trading documentation
+10. **Improve database logging with better information** - Enhanced structured logging and analytics
+11. **Implement fractional buying of shares** - Precise dollar-based position sizing
 
 ## Timeline and Resources
 
@@ -255,6 +287,26 @@ Each enhancement will be implemented in phases, with the highest priority items 
   - **Zero Breaking Changes**: All existing code continues working unchanged
 - **Example Output**: `📊 Warren Risk Assessment: 🟡 low (Score: 35/100) 💡 Suggestion: Consider 6 shares instead of 8 for lower risk`
 
+### ✅ Pydantic Structured Outputs System (September 2025)
+- **Objective**: Replace unstructured text/JSON responses with type-safe, validated Pydantic models
+- **Implementation**:
+  - Created comprehensive `models/` directory with 4 organized schema files
+  - Converted all 21 MCP tools across 3 servers to return structured outputs
+  - Built complete Pydantic model library with proper type safety and validation
+  - Maintained full backward compatibility and functionality
+- **Models Created**:
+  - **Account Models**: `AccountInfo`, `PortfolioSummary`, `PortfolioReport`, `TradingGuidance`, `RiskStatus`, `TradingStatus`, `Position`, `RiskLimits`
+  - **Market Models**: `StockPrice`, `MarketStatus`, `Order`, `OrderList`, `StockBars`, `Bar`, `PerformanceAnalysis`, `MarketMover`, `AssetValidation`, `AssetInfo`, `TradeList`
+  - **Trading Models**: `TradeResult`, `RiskAssessment`, `RiskLevel`, `OrderCancellation`
+  - **Notification Models**: `NotificationResult`
+- **Benefits**:
+  - **Type Safety**: All tool responses now have guaranteed data structure
+  - **Better Agent Understanding**: Structured data is easier for AI agents to parse and use
+  - **Validation**: Automatic data validation prevents malformed responses
+  - **IDE Support**: Full autocomplete and type checking for development
+  - **Consistency**: Standardized response formats across all 21 tools
+  - **Documentation**: Self-documenting schemas with field descriptions
+
 ## 🎉 Major Architectural Achievements
 
 The trader bot system has undergone significant architectural improvements, transforming from a basic trading system into a sophisticated, production-ready platform:
@@ -271,12 +323,17 @@ The trader bot system has undergone significant architectural improvements, tran
 - **From**: Hardcoded strategies in utility files
 - **To**: Injectable strategy framework with runtime configuration
 
+### **📡 Data Structure Evolution**
+- **From**: Unstructured text/JSON responses from MCP tools
+- **To**: Type-safe Pydantic models with validation and documentation
+
 ### **📊 Current System Capabilities**
 - ✅ **Production-Ready Trading**: Live Alpaca API integration with paper trading safety
 - ✅ **Advanced Risk Management**: 0-100 scoring, conviction-based sizing, intelligent warnings
 - ✅ **Modular Architecture**: Specialized clients (Market Data, Account, Trading, Risk)
 - ✅ **Strategy Framework**: Easy trader creation and customization
-- ✅ **MCP Integration**: Agent-friendly tools and interfaces
+- ✅ **MCP Integration**: Agent-friendly tools and interfaces with structured outputs
+- ✅ **Type-Safe Data**: Pydantic models for all 21 MCP tools across 3 servers
 - ✅ **Performance Optimized**: Shared connections, single-pass calculations
 - ✅ **Zero Breaking Changes**: Full backward compatibility maintained
 
