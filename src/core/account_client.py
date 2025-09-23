@@ -3,12 +3,9 @@ Account Client - Account information and portfolio operations.
 Handles account data, positions, and portfolio calculations.
 """
 
-import sys
-import os
 from typing import Dict, Any, List
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.base_alpaca_client import BaseAlpacaClient
+from .base_alpaca_client import BaseAlpacaClient
 
 
 class AccountClient(BaseAlpacaClient):

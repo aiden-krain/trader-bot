@@ -3,14 +3,11 @@ Trading Client - Risk-managed trading operations.
 Handles order execution with integrated risk management.
 """
 
-import sys
-import os
 from typing import Dict, Any
 from datetime import datetime
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.base_alpaca_client import BaseAlpacaClient
-from core.risk_manager import RiskManager
+from .base_alpaca_client import BaseAlpacaClient
+from .risk_manager import RiskManager
 from utils.database import write_log
 
 
@@ -80,14 +77,14 @@ class TradingClient(BaseAlpacaClient):
     def get_current_price(self, symbol: str) -> float:
         """Get current price for risk assessment - delegates to market data"""
         # Import here to avoid circular imports
-        from core.market_data_client import MarketDataClient
+        from .market_data_client import MarketDataClient
         market_client = MarketDataClient(self.paper_trading, self.trader_name)
         return market_client.get_real_price(symbol)
     
     def get_portfolio_value(self) -> float:
         """Get portfolio value for risk assessment - delegates to account"""
         # Import here to avoid circular imports
-        from core.account_client import AccountClient
+        from .account_client import AccountClient
         account_client = AccountClient(self.paper_trading, self.trader_name)
         return account_client.calculate_portfolio_value()
     
@@ -95,7 +92,7 @@ class TradingClient(BaseAlpacaClient):
         """Get count of filled orders today for risk assessment"""
         try:
             # Import here to avoid circular imports
-            from core.account_client import AccountClient
+            from .account_client import AccountClient
             account_client = AccountClient(self.paper_trading, self.trader_name)
             
             today = datetime.now().strftime("%Y-%m-%d")
@@ -178,7 +175,7 @@ class TradingClient(BaseAlpacaClient):
                 write_log(self.trader_name, "risk", suggestion)
             
             # Check buying power
-            from core.account_client import AccountClient
+            from .account_client import AccountClient
             account_client = AccountClient(self.paper_trading, self.trader_name)
             account_info = account_client.get_account_info()
             cash_balance = float(account_info.get("cash", 0))
@@ -217,7 +214,7 @@ class TradingClient(BaseAlpacaClient):
                 conviction_level = 5  # Default to medium conviction
             
             # Check if we have enough shares to sell
-            from core.account_client import AccountClient
+            from .account_client import AccountClient
             account_client = AccountClient(self.paper_trading, self.trader_name)
             positions = account_client.get_positions()
             current_position = next((pos for pos in positions if pos["symbol"] == symbol), None)

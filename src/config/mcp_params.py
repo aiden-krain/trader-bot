@@ -15,10 +15,10 @@ def trader_mcp_server_params():
     
     servers = [
         # Decomposed server architecture - focused responsibilities
-        {"command": "uv", "args": ["run", "servers/trading_server.py"]},
-        {"command": "uv", "args": ["run", "servers/account_server.py"]},
-        {"command": "uv", "args": ["run", "servers/market_data_server.py"]},
-        {"command": "uv", "args": ["run", "servers/push_server.py"]},
+        {"command": "uv", "args": ["run", "servers/trading_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
+        {"command": "uv", "args": ["run", "servers/account_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
+        {"command": "uv", "args": ["run", "servers/market_data_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
+        {"command": "uv", "args": ["run", "servers/push_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
     ]
     
     if os.getenv("BRAVE_API_KEY"):

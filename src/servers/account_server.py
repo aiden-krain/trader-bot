@@ -7,9 +7,6 @@ Trader-specific server that maintains individual trader contexts and strategies.
 import os
 import sys
 
-# Add src to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from mcp.server.fastmcp import FastMCP
 from core.alpaca_client import AlpacaClient
 from utils.database import write_log

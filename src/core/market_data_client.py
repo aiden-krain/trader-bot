@@ -3,13 +3,10 @@ Market Data Client - Pure Alpaca market data operations.
 Handles price fetching, market status, and historical data with no fallbacks.
 """
 
-import sys
-import os
 from typing import Dict, Any, List
 from datetime import datetime, date
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from core.base_alpaca_client import BaseAlpacaClient
+from .base_alpaca_client import BaseAlpacaClient
 
 
 class MarketDataClient(BaseAlpacaClient):

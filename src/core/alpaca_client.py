@@ -14,14 +14,12 @@ from datetime import datetime, timedelta
 
 # Alpaca clients are used implicitly through base_alpaca_client.py
 
-# Add utils path for database operations
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.database import write_log
 
 # Import decomposed clients
-from core.market_data_client import MarketDataClient
-from core.account_client import AccountClient
-from core.trading_client import TradingClient
+from .market_data_client import MarketDataClient
+from .account_client import AccountClient
+from .trading_client import TradingClient
 
 # Import strategy system
 from strategies import create_strategy, list_strategies
@@ -67,7 +65,7 @@ class AlpacaClient:
     def _display_risk_summary(self):
         """Display a clean summary of risk limits for this trader"""
         # Import the module-level tracker from base client
-        from core.base_alpaca_client import _logged_traders
+        from .base_alpaca_client import _logged_traders
         
         risk_key = f"risk_{self.trader_name}_{self.paper_trading}"
         if risk_key not in _logged_traders:

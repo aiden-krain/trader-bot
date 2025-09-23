@@ -8,9 +8,6 @@ import os
 import sys
 import asyncio
 
-# Add src to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from mcp.server.fastmcp import FastMCP
 from core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
