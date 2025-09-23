@@ -9,13 +9,15 @@ brave_env = {"BRAVE_API_KEY": os.getenv("BRAVE_API_KEY")}
 # Production MCP servers using Alpaca for real trading
 def trader_mcp_server_params():
     """
-    Enhanced production MCP server parameters for traders.
-    Uses Alpaca for real market data and trading, plus dual search for research.
+    Decomposed MCP server parameters for traders.
+    Uses focused server architecture: trading, account, market data, and notifications.
     """
     
     servers = [
-        # Clean accounts server - direct AlpacaClient integration
-        {"command": "uv", "args": ["run", "servers/accounts_server.py"]},
+        # Decomposed server architecture - focused responsibilities
+        {"command": "uv", "args": ["run", "servers/trading_server.py"]},
+        {"command": "uv", "args": ["run", "servers/account_server.py"]},
+        {"command": "uv", "args": ["run", "servers/market_data_server.py"]},
         {"command": "uv", "args": ["run", "servers/push_server.py"]},
     ]
     

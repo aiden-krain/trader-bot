@@ -39,9 +39,11 @@ The system follows a **modular, layered architecture** with clear separation of 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    🔧 MCP TOOLS LAYER                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  servers/accounts_server.py    │  Trading & account tools       │
-│  servers/alpaca_server.py      │  Market data tools             │
+│  servers/trading_server.py     │  Trade execution & order mgmt  │
+│  servers/account_server.py     │  Account info & portfolio      │
+│  servers/market_data_server.py │  Market data & analysis        │
 │  servers/push_server.py        │  Notification tools            │
+│  models/ (Pydantic schemas)    │  Type-safe structured outputs  │
 │  config/mcp_params.py          │  MCP server configurations     │
 └─────────────────────────────────────────────────────────────────┘
                                     │
@@ -49,7 +51,7 @@ The system follows a **modular, layered architecture** with clear separation of 
 ┌─────────────────────────────────────────────────────────────────┐
 │                   💼 CORE BUSINESS LAYER                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  core/alpaca_client.py         │  Main facade & orchestration   │
+│  core/alpaca_client.py         │  Clean facade & orchestration   │
 │  core/trading_client.py        │  Risk-managed order execution  │
 │  core/account_client.py        │  Account & portfolio operations │
 │  core/market_data_client.py    │  Price & market data           │
@@ -85,7 +87,7 @@ The system follows a **modular, layered architecture** with clear separation of 
    ├── Creates Trader instances (Warren, Ray, Cathie)
    ├── Each Trader gets strategy from strategies/strategies.py
    ├── AlpacaClient created with strategy-specific risk limits
-   └── MCP servers started (accounts_server.py, alpaca_server.py)
+   └── MCP servers started (trading_server.py, account_server.py, market_data_server.py)
 
 2. TRADING CYCLE FLOW:
    Trader.run_trading_session()
@@ -93,8 +95,9 @@ The system follows a **modular, layered architecture** with clear separation of 
    ├── Agent connects to MCP tools via mcp_params.py configuration
    ├── Agent uses tools: get_account_info, get_stock_price, buy_shares
    ├── MCP servers delegate to core clients:
-   │   ├── accounts_server.py → AlpacaClient → TradingClient
-   │   └── alpaca_server.py → AlpacaClient → MarketDataClient
+   │   ├── trading_server.py → AlpacaClient → TradingClient
+   │   ├── account_server.py → AlpacaClient → AccountClient
+   │   └── market_data_server.py → AlpacaClient → MarketDataClient
    ├── TradingClient applies enhanced risk assessment
    ├── Risk-approved trades execute via Alpaca API
    └── Results logged via database.py
@@ -125,9 +128,15 @@ src/
 │   ├── base_alpaca_client.py   # Shared connection management
 │   └── risk_manager.py         # Advanced risk assessment system
 ├── servers/           # 🔧 MCP Tools Layer
-│   ├── accounts_server.py      # Trading & account MCP tools
-│   ├── alpaca_server.py        # Market data MCP tools
+│   ├── trading_server.py       # Trade execution & order management
+│   ├── account_server.py       # Account info & portfolio management
+│   ├── market_data_server.py   # Market data & analysis tools
 │   └── push_server.py          # Notification MCP tools
+├── models/            # 📡 Pydantic Data Models
+│   ├── account_models.py       # Account & portfolio structured outputs
+│   ├── market_models.py        # Market data structured outputs
+│   ├── trading_models.py       # Trading & risk structured outputs
+│   └── notification_models.py  # Notification structured outputs
 ├── strategies/        # 🎯 Strategy Layer
 │   ├── strategies.py           # Warren, Ray, Cathie strategies
 │   └── __init__.py            # Strategy factory and registry
@@ -153,17 +162,25 @@ client = AlpacaClient(trader_name="Warren")  # Auto-loads Warren strategy
 client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
 ```
 
-**MCP Tools → Core Integration:**
+**MCP Tools → Core Integration with Structured Outputs:**
 ```python
-# servers/accounts_server.py exposes buy_shares tool
+# servers/trading_server.py exposes buy_shares tool with Pydantic response
 @mcp.tool()
-async def buy_shares(symbol, quantity, rationale, conviction_level=5):
-    client = get_trader_client("Warren")  # Gets AlpacaClient
-    return client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
+async def buy_shares(symbol, quantity, rationale, conviction_level=5) -> TradeResult:
+    client = get_trader_client("Warren")  # Gets clean AlpacaClient facade
+    result = client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
+    return TradeResult(
+        success=result.success,
+        message=result.message,
+        trade_details=result.trade_details,
+        risk_assessment=result.risk_assessment
+    )
 
+# core/alpaca_client.py provides clean facade that delegates to specialized clients
 # core/trading_client.py handles execution with risk assessment
 def buy_shares_with_risk_management(self, symbol, quantity, rationale, conviction_level=5):
     assessment = self.risk_manager.validate_trade(..., return_assessment=True)
+    # Returns structured RiskAssessment model with type safety
     # Real-time risk feedback: 📊 Warren Risk Assessment: 🟡 low (Score: 35/100)
 ```
 
@@ -173,13 +190,14 @@ def buy_shares_with_risk_management(self, symbol, quantity, rationale, convictio
 - **Real Market Data**: Live prices and market status via Alpaca
 - **Paper Trading**: Safe simulation environment with real data
 - **Live Trading**: Production capability (disabled by default)
-- **Modular Architecture**: Specialized clients for market data, accounts, and trading
+- **Clean Architecture**: Decomposed servers and optimized core clients with no import conflicts
 
 ### ✅ AI-Powered Decision Making
 - **Dual AI Models**: OpenAI GPT + Anthropic Claude for diverse strategies
 - **Strategy Framework**: Injectable Warren, Ray, and Cathie strategies
 - **Market Research**: Comprehensive news and sentiment analysis
 - **Autonomous Trading**: Fully automated decision making and execution
+- **Structured Data**: Type-safe Pydantic models for all tool responses
 
 ### ✅ Advanced Risk Management System
 - **Enhanced Risk Scoring**: 0-100 risk scores with five intuitive levels (🟢🟡🟠🔴🚨)
@@ -201,6 +219,13 @@ def buy_shares_with_risk_management(self, symbol, quantity, rationale, convictio
 - **Portfolio Risk**: Percentage-based portfolio risk controls
 - **Complete Logging**: Comprehensive audit trail and decision tracking
 - **Web Dashboard**: Real-time monitoring via Gradio interface
+
+### ✅ Architecture Excellence
+- **Decomposed Servers**: 4 focused MCP servers (trading, account, market data, notifications)
+- **Clean Core Clients**: Optimized facade pattern with no import conflicts
+- **Structured Outputs**: Type-safe Pydantic models for all tool responses
+- **Shared Connections**: Efficient connection reuse across specialized clients
+- **Backward Compatibility**: All existing code continues to work unchanged
 
 ## 🔧 Setup & Installation
 
@@ -260,10 +285,13 @@ cd src && uv run trading_floor.py
 Start individual MCP servers for development/testing:
 ```bash
 # Market data server
-cd src/servers && uv run alpaca_server.py
+cd src/servers && uv run market_data_server.py
 
 # Trading execution server  
-cd src/servers && uv run accounts_server.py
+cd src/servers && uv run trading_server.py
+
+# Account management server
+cd src/servers && uv run account_server.py
 ```
 
 ## 🔒 Safety & Risk Management
