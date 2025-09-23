@@ -51,7 +51,7 @@ The system follows a **modular, layered architecture** with clear separation of 
 ┌─────────────────────────────────────────────────────────────────┐
 │                   💼 CORE BUSINESS LAYER                       │
 ├─────────────────────────────────────────────────────────────────┤
-│  core/alpaca_client.py         │  Main facade & orchestration   │
+│  core/alpaca_client.py         │  Clean facade & orchestration   │
 │  core/trading_client.py        │  Risk-managed order execution  │
 │  core/account_client.py        │  Account & portfolio operations │
 │  core/market_data_client.py    │  Price & market data           │
@@ -167,7 +167,7 @@ client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
 # servers/trading_server.py exposes buy_shares tool with Pydantic response
 @mcp.tool()
 async def buy_shares(symbol, quantity, rationale, conviction_level=5) -> TradeResult:
-    client = get_trader_client("Warren")  # Gets AlpacaClient
+    client = get_trader_client("Warren")  # Gets clean AlpacaClient facade
     result = client.buy_shares_with_risk_management(symbol, quantity, rationale, conviction_level)
     return TradeResult(
         success=result.success,
@@ -176,6 +176,7 @@ async def buy_shares(symbol, quantity, rationale, conviction_level=5) -> TradeRe
         risk_assessment=result.risk_assessment
     )
 
+# core/alpaca_client.py provides clean facade that delegates to specialized clients
 # core/trading_client.py handles execution with risk assessment
 def buy_shares_with_risk_management(self, symbol, quantity, rationale, conviction_level=5):
     assessment = self.risk_manager.validate_trade(..., return_assessment=True)
@@ -189,7 +190,7 @@ def buy_shares_with_risk_management(self, symbol, quantity, rationale, convictio
 - **Real Market Data**: Live prices and market status via Alpaca
 - **Paper Trading**: Safe simulation environment with real data
 - **Live Trading**: Production capability (disabled by default)
-- **Modular Architecture**: Specialized clients for market data, accounts, and trading
+- **Clean Architecture**: Decomposed servers and optimized core clients with no import conflicts
 
 ### ✅ AI-Powered Decision Making
 - **Dual AI Models**: OpenAI GPT + Anthropic Claude for diverse strategies
@@ -218,6 +219,13 @@ def buy_shares_with_risk_management(self, symbol, quantity, rationale, convictio
 - **Portfolio Risk**: Percentage-based portfolio risk controls
 - **Complete Logging**: Comprehensive audit trail and decision tracking
 - **Web Dashboard**: Real-time monitoring via Gradio interface
+
+### ✅ Architecture Excellence
+- **Decomposed Servers**: 4 focused MCP servers (trading, account, market data, notifications)
+- **Clean Core Clients**: Optimized facade pattern with no import conflicts
+- **Structured Outputs**: Type-safe Pydantic models for all tool responses
+- **Shared Connections**: Efficient connection reuse across specialized clients
+- **Backward Compatibility**: All existing code continues to work unchanged
 
 ## 🔧 Setup & Installation
 
