@@ -269,3 +269,104 @@ class TradingClient(BaseAlpacaClient):
         except Exception as e:
             write_log(self.trader_name, "error", f"❌ Sell order exception: {str(e)}")
             return f"❌ Error executing sell order: {str(e)}"
+    
+    def cancel_order_by_id(self, order_id: str, rationale: str = "") -> Dict[str, Any]:
+        """Cancel a specific order by ID following Alpaca best practices"""
+        try:
+            from alpaca.common.exceptions import APIError
+            
+            # Get order details before cancellation for logging
+            try:
+                order = self.trading_client.get_order_by_id(order_id)
+                order_details = f"{order.symbol} {order.side} {order.qty} @ {order.limit_price or 'market'}"
+            except:
+                order_details = f"Order ID: {order_id}"
+            
+            # Cancel the order
+            cancelled_order = self.trading_client.cancel_order_by_id(order_id)
+            
+            success_msg = f"✅ Cancelled order: {order_details}"
+            if rationale:
+                success_msg += f" - {rationale}"
+            
+            write_log(self.trader_name, "trading", success_msg)
+            
+            return {
+                "success": True,
+                "order_id": order_id,
+                "symbol": getattr(cancelled_order, 'symbol', ''),
+                "message": success_msg,
+                "cancelled_at": str(getattr(cancelled_order, 'cancelled_at', ''))
+            }
+            
+        except APIError as e:
+            error_msg = f"Alpaca API Error: {str(e)}"
+            write_log(self.trader_name, "error", f"❌ Cancel order failed: {error_msg}")
+            return {
+                "success": False,
+                "order_id": order_id,
+                "symbol": "",
+                "message": f"❌ Failed to cancel order: {error_msg}",
+                "error": error_msg
+            }
+        except Exception as e:
+            error_msg = f"Cancel order error: {str(e)}"
+            write_log(self.trader_name, "error", f"❌ Cancel order exception: {error_msg}")
+            return {
+                "success": False,
+                "order_id": order_id,
+                "symbol": "",
+                "message": f"❌ Error cancelling order: {error_msg}",
+                "error": error_msg
+            }
+    
+    def cancel_all_orders(self, rationale: str = "") -> Dict[str, Any]:
+        """Cancel all open orders following Alpaca best practices"""
+        try:
+            from alpaca.common.exceptions import APIError
+            
+            # Get open orders count for logging
+            try:
+                from alpaca.trading.requests import GetOrdersRequest
+                from alpaca.trading.enums import QueryOrderStatus
+                
+                req = GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=100)
+                open_orders = self.trading_client.get_orders(req)
+                order_count = len(open_orders)
+            except:
+                order_count = "unknown number of"
+            
+            # Cancel all orders
+            cancelled_orders = self.trading_client.cancel_orders()
+            
+            success_msg = f"✅ Cancelled {order_count} open orders"
+            if rationale:
+                success_msg += f" - {rationale}"
+            
+            write_log(self.trader_name, "trading", success_msg)
+            
+            return {
+                "success": True,
+                "cancelled_count": len(cancelled_orders) if cancelled_orders else 0,
+                "message": success_msg,
+                "cancelled_orders": [str(order.id) for order in cancelled_orders] if cancelled_orders else []
+            }
+            
+        except APIError as e:
+            error_msg = f"Alpaca API Error: {str(e)}"
+            write_log(self.trader_name, "error", f"❌ Cancel all orders failed: {error_msg}")
+            return {
+                "success": False,
+                "cancelled_count": 0,
+                "message": f"❌ Failed to cancel orders: {error_msg}",
+                "error": error_msg
+            }
+        except Exception as e:
+            error_msg = f"Cancel all orders error: {str(e)}"
+            write_log(self.trader_name, "error", f"❌ Cancel all orders exception: {error_msg}")
+            return {
+                "success": False,
+                "cancelled_count": 0,
+                "message": f"❌ Error cancelling orders: {error_msg}",
+                "error": error_msg
+            }

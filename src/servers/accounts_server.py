@@ -20,7 +20,8 @@ from dotenv import load_dotenv
 # Import Pydantic models for structured responses
 from models import (
     AccountInfo, PortfolioSummary, PortfolioReport, TradingGuidance, 
-    RiskStatus, TradingStatus, TradeResult, StockPrice, Position, RiskLimits
+    RiskStatus, TradingStatus, TradeResult, StockPrice, Position, RiskLimits,
+    OrderCancellation, OrderList, Order, TradeList, TradeInfo
 )
 
 # Import strategy system
@@ -358,6 +359,142 @@ async def get_strategy(name: str) -> str:
         error_msg = f"❌ Strategy retrieval error: {str(e)}"
         write_log(name, "error", error_msg)
         return error_msg
+
+@mcp.tool()
+async def cancel_order(name: str, order_id: str, rationale: str) -> OrderCancellation:
+    """Cancel a specific order by ID with rationale"""
+    try:
+        client = get_trader_client(name)
+        
+        # Use TradingClient's cancel_order_by_id method
+        result = client.trading.cancel_order_by_id(order_id, rationale)
+        
+        return OrderCancellation(
+            success=result["success"],
+            order_id=result["order_id"],
+            symbol=result["symbol"],
+            message=result["message"],
+            error=result.get("error")
+        )
+        
+    except Exception as e:
+        error_msg = f"❌ Cancel order error: {str(e)}"
+        write_log(name, "error", error_msg)
+        return OrderCancellation(
+            success=False,
+            order_id=order_id,
+            symbol="",
+            message=error_msg,
+            error=str(e)
+        )
+
+@mcp.tool()
+async def cancel_all_orders(name: str, rationale: str) -> OrderCancellation:
+    """Cancel all open orders with rationale"""
+    try:
+        client = get_trader_client(name)
+        
+        # Use TradingClient's cancel_all_orders method
+        result = client.trading.cancel_all_orders(rationale)
+        
+        return OrderCancellation(
+            success=result["success"],
+            order_id="ALL",
+            symbol="MULTIPLE",
+            message=result["message"],
+            error=result.get("error")
+        )
+        
+    except Exception as e:
+        error_msg = f"❌ Cancel all orders error: {str(e)}"
+        write_log(name, "error", error_msg)
+        return OrderCancellation(
+            success=False,
+            order_id="ALL",
+            symbol="MULTIPLE",
+            message=error_msg,
+            error=str(e)
+        )
+
+@mcp.tool()
+async def get_current_orders(name: str) -> OrderList:
+    """Get all current open orders for a trader. Essential before making new trades."""
+    try:
+        client = get_trader_client(name)
+        
+        # Use AccountClient's get_orders method with status="all"
+        orders_data = client.account.get_orders(status="all", limit=50)
+        
+        orders = []
+        for order_data in orders_data:
+            orders.append(Order(
+                id=order_data.get('id', ''),
+                symbol=order_data.get('symbol', ''),
+                side=order_data.get('side', 'unknown'),
+                qty=order_data.get('qty', 0),
+                order_type=order_data.get('order_type', 'market'),
+                limit_price=order_data.get('limit_price'),
+                filled_qty=order_data.get('filled_qty', 0),
+                filled_avg_price=order_data.get('avg_fill_price'),
+                status=order_data.get('status', 'open'),
+                paper_trading=client.paper_trading
+            ))
+        
+        return OrderList(
+            orders=orders,
+            total_count=len(orders),
+            status_filter="open",
+            paper_trading=client.paper_trading
+        )
+        
+    except Exception as e:
+        error_msg = f"❌ Get current orders error: {str(e)}"
+        write_log(name, "error", error_msg)
+        return OrderList(
+            orders=[],
+            total_count=0,
+            status_filter="open",
+            paper_trading=True
+        )
+
+@mcp.tool()
+async def get_recent_trades(name: str, days: int = 3) -> TradeList:
+    """Get recent completed trades for a trader to learn from performance."""
+    try:
+        client = get_trader_client(name)
+        
+        # Use AccountClient's get_orders method with status="filled"
+        orders_data = client.account.get_orders(status="filled", limit=20)
+        
+        trades = []
+        for order_data in orders_data:
+            filled_avg_price = order_data.get('avg_fill_price')
+            if filled_avg_price:  # Only include actually filled orders
+                trades.append(TradeInfo(
+                    symbol=order_data.get('symbol', ''),
+                    side=order_data.get('side', 'unknown'),
+                    quantity=order_data.get('filled_qty', order_data.get('qty', 0)),
+                    price=float(filled_avg_price),
+                    timestamp=order_data.get('filled_at'),
+                    order_id=order_data.get('id')
+                ))
+        
+        return TradeList(
+            trades=trades,
+            total_count=len(trades),
+            period_days=days,
+            paper_trading=client.paper_trading
+        )
+        
+    except Exception as e:
+        error_msg = f"❌ Get recent trades error: {str(e)}"
+        write_log(name, "error", error_msg)
+        return TradeList(
+            trades=[],
+            total_count=0,
+            period_days=days,
+            paper_trading=True
+        )
 
 # Resource endpoints (simplified)
 @mcp.resource("accounts://trader/{name}")

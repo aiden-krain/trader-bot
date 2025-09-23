@@ -212,22 +212,84 @@ This document outlines planned enhancements and improvements to the Trader Bot s
 - Better separation of concerns in the template system
 - More predictable agent behavior with clearer instructions
 
+## 12. Enhanced Open Order Management for Trading Agents ✅ COMPLETED
+
+**Implementation Completed (September 2025):**
+- ✅ **Complete Order Management System**: Comprehensive order cancellation and management tools
+- ✅ **Professional Trading Workflow**: 6-step enhanced workflow with active order book management
+- ✅ **Alpaca Best Practices**: Following official Alpaca API patterns and error handling
+- ✅ **Architecture Consistency**: All order/trade tools properly organized in accounts_server.py
+
+**Components Implemented:**
+
+**✅ TradingClient Methods** (`src/core/trading_client.py`):
+- `cancel_order_by_id(order_id, rationale)` - Individual order cancellation with detailed logging
+- `cancel_all_orders(rationale)` - Bulk order cancellation following Alpaca patterns
+- Proper `APIError` exception handling from `alpaca.common.exceptions`
+- Comprehensive audit trails with `write_log` for compliance
+- Order details retrieval before cancellation for transparency
+
+**✅ MCP Tools** (`src/servers/accounts_server.py`):
+- `cancel_order(name, order_id, rationale)` → `OrderCancellation` - Cancel specific orders
+- `cancel_all_orders(name, rationale)` → `OrderCancellation` - Bulk cancellation
+- `get_current_orders(name)` → `OrderList` - View all open orders (moved from alpaca_server.py)
+- `get_recent_trades(name, days)` → `TradeList` - Review filled orders (moved from alpaca_server.py)
+- All tools follow consistent trader name pattern with structured Pydantic responses
+
+**✅ Enhanced Agent Templates** (`src/trading_agents/templates.py`):
+- Updated 6-step workflow emphasizing order management: Check → Review → Analyze → **Manage** → Decide → Report
+- Added `cancel_all_orders` to available tools list
+- New "ORDER MANAGEMENT BEST PRACTICES" section with clear guidance
+- Enhanced push notification format to include order management actions
+- Clear instructions on when and how to cancel orders
+
+**✅ Architecture Improvements:**
+- **Consistent Organization**: All order/trade tools moved to `accounts_server.py` for trader-specific operations
+- **Proper Integration**: Uses `client.trading.cancel_order_by_id()` and `client.account.get_orders()` patterns
+- **Zero Breaking Changes**: Full backward compatibility maintained
+- **Alpaca Compliance**: Follows official API patterns with proper error handling
+
+**Enhanced Trading Workflow Achieved:**
+```
+1. Check: get_trading_guidance (funds/limits)
+2. Review: get_current_orders + get_recent_trades (CRITICAL: Always check open orders first!)
+3. Analyze: Research market + review portfolio  
+4. Manage: Cancel outdated orders with cancel_order or cancel_all_orders if needed
+5. Decide: Trade, hold, or adjust positions
+6. Report: Use push tool to send detailed session summary
+```
+
+**Benefits Achieved:**
+- 🎯 **Professional Order Management**: Agents actively manage their order book like professional traders
+- 🎯 **Risk Reduction**: Prevents conflicting orders and capital inefficiency  
+- 🎯 **Strategic Flexibility**: Cancel outdated orders when market conditions change
+- 🎯 **Audit Trail**: All cancellations logged with rationale for compliance
+- 🎯 **Alpaca Best Practices**: Follows official Alpaca API patterns and error handling
+- 🎯 **Consistent Architecture**: All trader-specific tools properly organized
+
+**Testing Results:**
+- ✅ Successfully tested with trading_floor.py - all three traders (Warren, Ray, Cathie) completed trading cycles
+- ✅ Order management tools properly integrated and accessible to agents
+- ✅ Structured Pydantic responses working correctly
+- ✅ Proper error handling and logging confirmed
+
 ## Implementation Priority
 
 ### ✅ Completed (High Priority)
 1. ✅ **Separating trading strategies from core code** - Completed with flexible strategy system
 2. ✅ **Simplification of tools and risk checking** - Completed with enhanced risk assessment system
+3. ✅ **Enhanced open order management for trading agents** - Completed with comprehensive order management system
 
 ### 🚀 Next Priority (In Progress/Planned)
-3. **Clean up trading agent templates** - Separate identity from session instructions
-4. **Adding cryptocurrency trading support** - Expand beyond stock trading
-5. **Advanced order types support** - Limit orders, stop losses, trailing stops
-6. **Understand reset.py and integrate better into system** - Legacy code analysis and integration
-7. **UI graph improvements** - Portfolio visualization and performance tracking
-8. **Enhanced market research tools** - Social sentiment, technical analysis
-9. **Improved trading guidelines** - Comprehensive trading documentation
-10. **Improve database logging with better information** - Enhanced structured logging and analytics
-11. **Implement fractional buying of shares** - Precise dollar-based position sizing
+4. **Clean up trading agent templates** - Separate identity from session instructions
+5. **Adding cryptocurrency trading support** - Expand beyond stock trading
+6. **Advanced order types support** - Limit orders, stop losses, trailing stops
+7. **Understand reset.py and integrate better into system** - Legacy code analysis and integration
+8. **UI graph improvements** - Portfolio visualization and performance tracking
+9. **Enhanced market research tools** - Social sentiment, technical analysis
+10. **Improved trading guidelines** - Comprehensive trading documentation
+11. **Improve database logging with better information** - Enhanced structured logging and analytics
+12. **Implement fractional buying of shares** - Precise dollar-based position sizing
 
 ## Timeline and Resources
 
@@ -307,6 +369,28 @@ Each enhancement will be implemented in phases, with the highest priority items 
   - **Consistency**: Standardized response formats across all 21 tools
   - **Documentation**: Self-documenting schemas with field descriptions
 
+### ✅ Enhanced Open Order Management System (September 2025)
+- **Objective**: Enable professional order book management for trading agents following Alpaca best practices
+- **Implementation**:
+  - Added `cancel_order_by_id()` and `cancel_all_orders()` methods to `TradingClient` with proper `APIError` handling
+  - Created `cancel_order` and `cancel_all_orders` MCP tools in `accounts_server.py` with structured `OrderCancellation` responses
+  - Moved `get_current_orders` and `get_recent_trades` from `alpaca_server.py` to `accounts_server.py` for architectural consistency
+  - Enhanced trading agent templates with 6-step workflow emphasizing active order management
+  - Added "ORDER MANAGEMENT BEST PRACTICES" section with clear guidance on when and how to cancel orders
+  - Updated push notification format to include order management actions in trading session summaries
+- **Architecture Improvements**:
+  - **Consistent Organization**: All order/trade tools now in `accounts_server.py` with trader name parameters
+  - **Alpaca Compliance**: Uses official `trading_client.cancel_order_by_id()` and `trading_client.cancel_orders()` patterns
+  - **Proper Integration**: Leverages `client.trading` and `client.account` facades for clean separation of concerns
+  - **Comprehensive Logging**: All cancellations logged with rationale for audit trails and compliance
+- **Benefits**:
+  - **Professional Trading Behavior**: Agents actively manage order books like professional traders
+  - **Risk Reduction**: Prevents conflicting orders and capital inefficiency through active order review
+  - **Strategic Flexibility**: Agents can cancel outdated orders when market conditions change
+  - **Audit Compliance**: All order management actions logged with rationale for regulatory compliance
+  - **Enhanced Workflow**: 6-step process includes critical order review and management phases
+  - **Zero Breaking Changes**: Full backward compatibility maintained with existing functionality
+
 ## 🎉 Major Architectural Achievements
 
 The trader bot system has undergone significant architectural improvements, transforming from a basic trading system into a sophisticated, production-ready platform:
@@ -330,6 +414,7 @@ The trader bot system has undergone significant architectural improvements, tran
 ### **📊 Current System Capabilities**
 - ✅ **Production-Ready Trading**: Live Alpaca API integration with paper trading safety
 - ✅ **Advanced Risk Management**: 0-100 scoring, conviction-based sizing, intelligent warnings
+- ✅ **Professional Order Management**: Complete order book management with cancellation capabilities
 - ✅ **Modular Architecture**: Specialized clients (Market Data, Account, Trading, Risk)
 - ✅ **Strategy Framework**: Easy trader creation and customization
 - ✅ **MCP Integration**: Agent-friendly tools and interfaces with structured outputs

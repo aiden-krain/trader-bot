@@ -28,14 +28,14 @@ if USE_MIXED_MODELS:
     # Mix of OpenAI and Anthropic models for diversity
     model_names = [
         "gpt-4o-mini",
-        "gpt-4o",
-        "claude-3-5-sonnet-20241022"
+        "gpt-4o-mini",
+        "gpt-4o"
     ]
-    short_model_names = ["GPT 4o Mini", "GPT 4o", "Claude 3.5 Sonnet"]
+    short_model_names = ["GPT 4o Mini", "GPT 4o Mini", "GPT 4o"]
 else:
     # Single provider mode
     if DEFAULT_MODEL_PROVIDER == "anthropic":
-        model_names = ["claude-3-5-haiku-20241022"] * 3
+        model_names = ["claude-3-5-haiku-latest"] * 3
         short_model_names = ["Claude 3.5 Haiku"] * 3
     else:
         model_names = ["gpt-4o-mini"] * 3
