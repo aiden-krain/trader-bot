@@ -1,32 +1,31 @@
 """
-Alpaca MCP Server - Provides market data and trading tools via Model Context Protocol.
-This replaces the simulated market_server.py with real Alpaca financial data.
-Enhanced with structured Pydantic outputs for better AI agent integration.
+Market Data MCP Server - Focused on market data and analysis.
+Provides comprehensive market information, stock analysis, and asset search using MarketDataClient.
+Shared/global server that provides market data to all traders without trader-specific state.
 """
 
-import sys
 import os
+import sys
+import asyncio
 
 # Add src to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp.server.fastmcp import FastMCP
 from core.alpaca_client import AlpacaClient
-from typing import Dict, Any, List
-import asyncio
-import json
+from dotenv import load_dotenv
 
 # Import Pydantic models for structured responses
 from models import (
-    StockPrice, MarketStatus, Order, StockBars, PerformanceAnalysis, 
-    MarketMover, AssetValidation, AssetInfo, Bar, OrderList, TradeList, TradeInfo
+    StockPrice, MarketStatus, StockBars, PerformanceAnalysis, 
+    MarketMover, AssetValidation, AssetInfo, Bar
 )
 
-mcp = FastMCP("Alpaca Market Data & Trading")
+load_dotenv()
 
-# Initialize Alpaca client
-# Paper trading by default for safety - can be changed via environment variable
-import os
+mcp = FastMCP("Market Data Server")
+
+# Trading mode configuration
 paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
 
 # Use Warren as default trader for shared market data server
@@ -36,7 +35,7 @@ alpaca = AlpacaClient(paper_trading=paper_trading, trader_name="Warren")
 @mcp.tool()
 async def get_stock_price(symbol: str) -> StockPrice:
     """
-    Get current stock price for a symbol from Alpaca.
+    Get current stock price for a symbol using MarketDataClient.
     
     Args:
         symbol: Stock ticker symbol (e.g., 'AAPL', 'TSLA')
@@ -45,8 +44,8 @@ async def get_stock_price(symbol: str) -> StockPrice:
         StockPrice model containing price, timestamp, and metadata
     """
     try:
-        price = alpaca.get_real_price(symbol)
-        quote = alpaca.get_quote(symbol)
+        price = alpaca.market_data.get_real_price(symbol)
+        quote = alpaca.market_data.get_quote(symbol)
         
         if price > 0:
             return StockPrice(
@@ -80,13 +79,13 @@ async def get_stock_price(symbol: str) -> StockPrice:
 @mcp.tool()
 async def get_market_status() -> MarketStatus:
     """
-    Get current market status from Alpaca.
+    Get current market status using MarketDataClient.
     
     Returns:
         MarketStatus model containing market open/close status and hours
     """
     try:
-        status_data = alpaca.get_market_status()
+        status_data = alpaca.market_data.get_market_status()
         return MarketStatus(
             is_open=status_data.get("is_open", False),
             next_open=status_data.get("next_open"),
@@ -100,69 +99,9 @@ async def get_market_status() -> MarketStatus:
         )
 
 @mcp.tool()
-async def get_market_account_info() -> Dict[str, Any]:
+async def search_stocks(query: str, limit: int = 10) -> list[AssetInfo]:
     """
-    Get Alpaca market account information including buying power and portfolio value.
-    
-    Returns:
-        Dict containing market account details and trading status
-    """
-    account_info = alpaca.get_account_info()
-    account_info["paper_trading"] = paper_trading
-    return account_info
-
-@mcp.tool()
-async def get_positions() -> List[Dict[str, Any]]:
-    """
-    Get current positions from Alpaca account.
-    
-    Returns:
-        List of position dictionaries with holdings and P&L
-    """
-    positions = alpaca.get_positions()
-    # Add metadata to each position
-    for pos in positions:
-        pos["paper_trading"] = paper_trading
-    return positions
-
-@mcp.tool()
-async def get_recent_orders(limit: int = 20) -> List[Order]:
-    """
-    Get recent order history from Alpaca.
-    
-    Args:
-        limit: Maximum number of orders to return (default 20)
-    
-    Returns:
-        List of Order models with status and fill details
-    """
-    try:
-        orders_data = alpaca.get_orders(status='all', limit=limit)
-        orders = []
-        
-        for order_data in orders_data:
-            if isinstance(order_data, dict) and "error" not in order_data:
-                orders.append(Order(
-                    id=order_data.get('id'),
-                    symbol=order_data.get('symbol', ''),
-                    side=order_data.get('side', 'unknown'),
-                    qty=order_data.get('qty', 0),
-                    order_type=order_data.get('order_type', 'market'),
-                    limit_price=order_data.get('limit_price'),
-                    filled_qty=order_data.get('filled_qty'),
-                    filled_avg_price=order_data.get('filled_avg_price'),
-                    status=order_data.get('status'),
-                    paper_trading=paper_trading
-                ))
-        
-        return orders
-    except Exception as e:
-        return []
-
-@mcp.tool()
-async def search_stocks(query: str, limit: int = 10) -> List[AssetInfo]:
-    """
-    Search for tradeable stocks by symbol or company name.
+    Search for tradeable stocks by symbol or company name using MarketDataClient.
     
     Args:
         query: Search term (symbol or company name)
@@ -172,7 +111,7 @@ async def search_stocks(query: str, limit: int = 10) -> List[AssetInfo]:
         List of AssetInfo models with trading details
     """
     try:
-        results = alpaca.search_assets(query, limit=limit)
+        results = alpaca.market_data.search_assets(query, limit=limit)
         
         # Enhance results with current prices for tradeable assets
         enhanced_results = []
@@ -181,7 +120,7 @@ async def search_stocks(query: str, limit: int = 10) -> List[AssetInfo]:
                 # Add current price if available
                 current_price = None
                 try:
-                    price = alpaca.get_real_price(asset["symbol"])
+                    price = alpaca.market_data.get_real_price(asset["symbol"])
                     current_price = price if price > 0 else None
                 except:
                     pass
@@ -203,9 +142,52 @@ async def search_stocks(query: str, limit: int = 10) -> List[AssetInfo]:
         return []
 
 @mcp.tool()
+async def validate_symbol(symbol: str) -> AssetValidation:
+    """
+    Validate if a stock symbol is tradeable using MarketDataClient.
+    
+    Args:
+        symbol: Stock ticker symbol to validate
+    
+    Returns:
+        AssetValidation model containing validation result and asset details
+    """
+    try:
+        # Search for exact symbol match
+        assets = alpaca.market_data.search_assets(symbol, limit=1)
+        
+        if assets and len(assets) > 0 and "error" not in assets[0]:
+            asset = assets[0]
+            if asset["symbol"].upper() == symbol.upper():
+                return AssetValidation(
+                    symbol=symbol,
+                    valid=True,
+                    tradable=asset.get("tradable", False),
+                    name=asset.get("name", ""),
+                    exchange=asset.get("exchange", ""),
+                    marginable=asset.get("marginable", False),
+                    shortable=asset.get("shortable", False),
+                    paper_trading=paper_trading
+                )
+        
+        return AssetValidation(
+            symbol=symbol,
+            valid=False,
+            paper_trading=paper_trading
+        )
+    
+    except Exception as e:
+        return AssetValidation(
+            symbol=symbol,
+            valid=False,
+            paper_trading=paper_trading,
+            error=str(e)
+        )
+
+@mcp.tool()
 async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) -> StockBars:
     """
-    Get historical price bars/candles for technical analysis.
+    Get historical price bars/candles for technical analysis using MarketDataClient.
     
     Args:
         symbol: Stock ticker symbol
@@ -216,7 +198,7 @@ async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) 
         StockBars model containing historical OHLCV data
     """
     try:
-        bars_data = alpaca.get_bars(symbol, timeframe, limit=limit)
+        bars_data = alpaca.market_data.get_bars(symbol, timeframe, limit=limit)
         
         if "error" in bars_data:
             return StockBars(
@@ -255,7 +237,7 @@ async def get_stock_bars(symbol: str, timeframe: str = "1Day", limit: int = 30) 
 @mcp.tool()
 async def analyze_stock_performance(symbol: str, days: int = 30) -> PerformanceAnalysis:
     """
-    Analyze stock performance over specified period.
+    Analyze stock performance over specified period using MarketDataClient.
     
     Args:
         symbol: Stock ticker symbol
@@ -265,8 +247,8 @@ async def analyze_stock_performance(symbol: str, days: int = 30) -> PerformanceA
         PerformanceAnalysis model containing performance metrics and analysis
     """
     try:
-        # Get historical data
-        bars_data = alpaca.get_bars(symbol, "1Day", limit=days)
+        # Get historical data using MarketDataClient
+        bars_data = alpaca.market_data.get_bars(symbol, "1Day", limit=days)
         
         if "error" in bars_data:
             return PerformanceAnalysis(
@@ -340,9 +322,9 @@ async def analyze_stock_performance(symbol: str, days: int = 30) -> PerformanceA
         )
 
 @mcp.tool()
-async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List[MarketMover]:
+async def get_market_movers(direction: str = "gainers", limit: int = 10) -> list[MarketMover]:
     """
-    Get top market movers (gainers or losers).
+    Get top market movers (gainers or losers) using MarketDataClient.
     Note: This is a simplified implementation as Alpaca doesn't provide direct screener API.
     
     Args:
@@ -360,7 +342,7 @@ async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List
         movers = []
         for symbol in popular_symbols[:limit]:
             try:
-                bars_data = alpaca.get_bars(symbol, "1Day", limit=2)
+                bars_data = alpaca.market_data.get_bars(symbol, "1Day", limit=2)
                 bars = bars_data.get("bars", [])
                 
                 if len(bars) >= 2:
@@ -390,51 +372,28 @@ async def get_market_movers(direction: str = "gainers", limit: int = 10) -> List
     except Exception as e:
         return []
 
-
-
-@mcp.tool()
-async def validate_symbol(symbol: str) -> AssetValidation:
-    """
-    Validate if a stock symbol is tradeable on Alpaca.
-    
-    Args:
-        symbol: Stock ticker symbol to validate
-    
-    Returns:
-        AssetValidation model containing validation result and asset details
-    """
+# Resource endpoints for market data
+@mcp.resource("market://status")
+async def read_market_status_resource() -> str:
+    """Get market status as resource"""
     try:
-        # Search for exact symbol match
-        assets = alpaca.search_assets(symbol, limit=1)
-        
-        if assets and len(assets) > 0 and "error" not in assets[0]:
-            asset = assets[0]
-            if asset["symbol"].upper() == symbol.upper():
-                return AssetValidation(
-                    symbol=symbol,
-                    valid=True,
-                    tradable=asset.get("tradable", False),
-                    name=asset.get("name", ""),
-                    exchange=asset.get("exchange", ""),
-                    marginable=asset.get("marginable", False),
-                    shortable=asset.get("shortable", False),
-                    paper_trading=paper_trading
-                )
-        
-        return AssetValidation(
-            symbol=symbol,
-            valid=False,
-            paper_trading=paper_trading
-        )
-    
+        status_data = alpaca.market_data.get_market_status()
+        return f"Market Status: {'Open' if status_data.get('is_open', False) else 'Closed'}"
     except Exception as e:
-        return AssetValidation(
-            symbol=symbol,
-            valid=False,
-            paper_trading=paper_trading,
-            error=str(e)
-        )
+        return f"❌ Error loading market status: {str(e)}"
+
+@mcp.resource("market://price/{symbol}")
+async def read_stock_price_resource(symbol: str) -> str:
+    """Get stock price as resource"""
+    try:
+        price = alpaca.market_data.get_real_price(symbol)
+        return f"{symbol}: ${price:.2f}"
+    except Exception as e:
+        return f"❌ Error loading price for {symbol}: {str(e)}"
 
 if __name__ == "__main__":
-    print(f"Starting Alpaca MCP Server ({'Paper Trading' if paper_trading else 'Live Trading'})")
+    print(f"🚀 Starting Market Data MCP Server")
+    print(f"   Paper Trading: {paper_trading}")
+    print(f"   Focus: Market Data & Analysis")
+    
     mcp.run(transport="stdio")

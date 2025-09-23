@@ -10,7 +10,7 @@ You have access to REAL-TIME production trading through Alpaca Markets API with 
 - Actual trade execution via buy_shares and sell_shares (paper trading mode for safety)
 - Portfolio management with live balance and position tracking
 - Risk management with automatic validation of all trades
-- Comprehensive market research via dual search capabilities (Serper + Brave Search)
+- Comprehensive market research via search capabilities (Brave Search)
 
 CRITICAL: Always start by calling get_trading_guidance to understand your available funds and risk limits.
 """
@@ -21,7 +21,7 @@ def researcher_instructions():
 You are a financial research specialist providing market analysis for production trading agents.
 
 Your research capabilities include:
-- Real-time web search via Serper (Google Search) and Brave Search APIs  
+- Real-time web search via Brave Search APIs  
 - Live market data and financial information
 - Company news, earnings, and fundamental analysis
 - Market trends, sector analysis, and economic indicators

@@ -56,7 +56,9 @@ Servers are configured as function-based parameter factories:
 ```python
 def trader_mcp_server_params():
     return [
-        {"command": "uv", "args": ["run", "servers/accounts_server.py"]},
+        {"command": "uv", "args": ["run", "servers/trading_server.py"]},
+        {"command": "uv", "args": ["run", "servers/account_server.py"]},
+        {"command": "uv", "args": ["run", "servers/market_data_server.py"]},
         {"command": "uv", "args": ["run", "servers/push_server.py"]},
         {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-brave-search"], "env": brave_env}
     ]
@@ -130,7 +132,7 @@ Use `trading_agents/templates.py` for instruction prompts - separate researcher 
 
 ### Trader Management
 - Each trader has dedicated credentials (e.g., `WARREN_ALPACA_KEY`) with fallback to generic
-- Trader strategies defined in `utils/reset.py` and served via `accounts_server.py`
+- Trader strategies defined in `strategies/strategies.py` and served via `account_server.py`
 - Agent memory persisted in SQLite databases per trader (`memory/{name}.db`)
 
 ## Production Trading Features
@@ -174,8 +176,9 @@ cd src && uv run test_system.py   # System tests
 
 ### MCP Server Testing
 ```bash
-cd src/servers && uv run accounts_server.py  # Test accounts server
-cd src/servers && uv run alpaca_server.py    # Test market data server
+cd src/servers && uv run trading_server.py     # Test trading server
+cd src/servers && uv run account_server.py     # Test account server  
+cd src/servers && uv run market_data_server.py # Test market data server
 ```
 
 ### Key Environment Variables

@@ -24,6 +24,42 @@ This document outlines planned enhancements and improvements to the Trader Bot s
 - Add visualization of risk metrics in the UI dashboard
 - Create a risk simulation tool to test trading strategies against historical data
 
+## 1.5. Server Architecture Decomposition
+
+**COMPLETED ✅**: Successfully decomposed monolithic MCP servers into focused, specialized servers aligned with core client architecture.
+
+**Implementation Completed:**
+- ✅ **trading_server.py**: Focused on trade execution and order management (4 tools)
+  - Tools: `buy_shares`, `sell_shares`, `cancel_order`, `cancel_all_orders`
+  - Uses TradingClient for risk-managed execution
+  - Trader-specific with individual contexts and strategies
+
+- ✅ **account_server.py**: Focused on account information and portfolio management (8 tools)  
+  - Tools: `get_account_info`, `get_trading_guidance`, `get_portfolio_summary`, `get_portfolio_report`, `get_current_orders`, `get_recent_trades`, `get_risk_status`, `get_strategy`
+  - Uses AccountClient + RiskManager + Strategy system
+  - Trader-specific with comprehensive account data
+
+- ✅ **market_data_server.py**: Focused on market data and analysis (7 tools)
+  - Tools: `get_stock_price`, `get_market_status`, `search_stocks`, `validate_symbol`, `get_stock_bars`, `analyze_stock_performance`, `get_market_movers`
+  - Uses MarketDataClient for pure market data operations
+  - Shared/global server with no trader-specific state
+
+- ✅ **push_server.py**: Notifications (1 tool) - kept as-is, already clean and focused
+
+**Architecture Benefits Achieved:**
+- 🎯 **Clean Separation**: Each server has single, clear responsibility
+- 🎯 **Aligned Architecture**: Server structure matches core client decomposition  
+- 🎯 **No Duplication**: Eliminated duplicate functionality (e.g., `get_real_price` in both servers)
+- 🎯 **Proper Mapping**: Tools use correct underlying core clients
+- 🎯 **Maintainability**: Easier to understand, test, and modify
+- 🎯 **Scalability**: Easy to add new tools to appropriate servers
+
+**Migration Results:**
+- Original: 2 mixed-concern servers (accounts_server.py: 14 tools, alpaca_server.py: 10 tools)
+- New: 3 focused servers (trading: 4, account: 8, market_data: 7 tools)
+- Eliminated 5 duplicate/redundant tools while preserving all functionality
+- Reduced complexity while improving architectural clarity
+
 ## 2. Adding Cryptocurrency Trading Support
 
 **Current Implementation:**

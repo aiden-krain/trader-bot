@@ -39,8 +39,9 @@ The system follows a **modular, layered architecture** with clear separation of 
 ┌─────────────────────────────────────────────────────────────────┐
 │                    🔧 MCP TOOLS LAYER                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  servers/accounts_server.py    │  Trading & account tools       │
-│  servers/alpaca_server.py      │  Market data tools             │
+│  servers/trading_server.py     │  Trade execution & order mgmt  │
+│  servers/account_server.py     │  Account info & portfolio      │
+│  servers/market_data_server.py │  Market data & analysis        │
 │  servers/push_server.py        │  Notification tools            │
 │  models/ (Pydantic schemas)    │  Type-safe structured outputs  │
 │  config/mcp_params.py          │  MCP server configurations     │
@@ -86,7 +87,7 @@ The system follows a **modular, layered architecture** with clear separation of 
    ├── Creates Trader instances (Warren, Ray, Cathie)
    ├── Each Trader gets strategy from strategies/strategies.py
    ├── AlpacaClient created with strategy-specific risk limits
-   └── MCP servers started (accounts_server.py, alpaca_server.py)
+   └── MCP servers started (trading_server.py, account_server.py, market_data_server.py)
 
 2. TRADING CYCLE FLOW:
    Trader.run_trading_session()
@@ -94,8 +95,9 @@ The system follows a **modular, layered architecture** with clear separation of 
    ├── Agent connects to MCP tools via mcp_params.py configuration
    ├── Agent uses tools: get_account_info, get_stock_price, buy_shares
    ├── MCP servers delegate to core clients:
-   │   ├── accounts_server.py → AlpacaClient → TradingClient
-   │   └── alpaca_server.py → AlpacaClient → MarketDataClient
+   │   ├── trading_server.py → AlpacaClient → TradingClient
+   │   ├── account_server.py → AlpacaClient → AccountClient
+   │   └── market_data_server.py → AlpacaClient → MarketDataClient
    ├── TradingClient applies enhanced risk assessment
    ├── Risk-approved trades execute via Alpaca API
    └── Results logged via database.py
@@ -126,8 +128,9 @@ src/
 │   ├── base_alpaca_client.py   # Shared connection management
 │   └── risk_manager.py         # Advanced risk assessment system
 ├── servers/           # 🔧 MCP Tools Layer
-│   ├── accounts_server.py      # Trading & account MCP tools
-│   ├── alpaca_server.py        # Market data MCP tools
+│   ├── trading_server.py       # Trade execution & order management
+│   ├── account_server.py       # Account info & portfolio management
+│   ├── market_data_server.py   # Market data & analysis tools
 │   └── push_server.py          # Notification MCP tools
 ├── models/            # 📡 Pydantic Data Models
 │   ├── account_models.py       # Account & portfolio structured outputs
@@ -161,7 +164,7 @@ client.risk_manager.risk_limits = warren_strategy.get_risk_limits()
 
 **MCP Tools → Core Integration with Structured Outputs:**
 ```python
-# servers/accounts_server.py exposes buy_shares tool with Pydantic response
+# servers/trading_server.py exposes buy_shares tool with Pydantic response
 @mcp.tool()
 async def buy_shares(symbol, quantity, rationale, conviction_level=5) -> TradeResult:
     client = get_trader_client("Warren")  # Gets AlpacaClient
@@ -274,10 +277,13 @@ cd src && uv run trading_floor.py
 Start individual MCP servers for development/testing:
 ```bash
 # Market data server
-cd src/servers && uv run alpaca_server.py
+cd src/servers && uv run market_data_server.py
 
 # Trading execution server  
-cd src/servers && uv run accounts_server.py
+cd src/servers && uv run trading_server.py
+
+# Account management server
+cd src/servers && uv run account_server.py
 ```
 
 ## 🔒 Safety & Risk Management
