@@ -2,7 +2,7 @@
 uv>=0.8.17
 
 # Core Dependencies (install first to avoid conflicts)
-numpy>=1.24.0
+numpy==1.26.4
 pandas>=2.0.0
 
 # Core AI Providers (Production Only)
