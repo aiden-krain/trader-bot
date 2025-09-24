@@ -1,12 +1,6 @@
 [build]
 builder = "heroku/python"
-
-[build.buildCommand]
-command = """
-# Modern Python buildpack approach - avoids nixpacks numpy issues
-pip install --upgrade pip setuptools wheel
-pip install -r requirements.txt
-"""
+buildCommand = "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
 
 [deploy]
 startCommand = "cd src && python combined_app.py"
