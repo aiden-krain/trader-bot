@@ -8,7 +8,7 @@ import os
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 from utils.database import write_log
 from dotenv import load_dotenv
 

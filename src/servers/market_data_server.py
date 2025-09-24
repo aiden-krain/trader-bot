@@ -9,7 +9,7 @@ import sys
 import asyncio
 
 from mcp.server.fastmcp import FastMCP
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
 
 # Import Pydantic models for structured responses

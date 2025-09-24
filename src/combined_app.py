@@ -13,7 +13,7 @@ from trading_floor import names, lastnames, short_model_names, create_traders
 import plotly.express as px
 from utils.database import read_log, write_portfolio_snapshot, read_portfolio_history, read_all_portfolio_history, read_recent_logs
 from trading_agents.traders import Trader
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 import json
 from datetime import datetime
 import os

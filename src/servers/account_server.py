@@ -8,7 +8,7 @@ import os
 import sys
 
 from mcp.server.fastmcp import FastMCP
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 from utils.database import write_log
 from dotenv import load_dotenv
 
@@ -19,13 +19,8 @@ from models import (
 )
 
 # Import strategy system
-try:
-    from strategies import create_strategy, list_strategies
-    STRATEGY_SYSTEM_AVAILABLE = True
-except ImportError:
-    STRATEGY_SYSTEM_AVAILABLE = False
-    # Fallback to AlpacaClient strategies
-    from core.alpaca_client import warren_strategy, ray_strategy, cathie_strategy
+from strategies import create_strategy, list_strategies
+STRATEGY_SYSTEM_AVAILABLE = True
 
 load_dotenv()
 
@@ -37,13 +32,7 @@ paper_trading = os.getenv("ALPACA_PAPER_TRADING", "true").lower() == "true"
 # Simple cache for trader clients
 _trader_clients = {}
 
-# Strategy mapping (fallback only)
-if not STRATEGY_SYSTEM_AVAILABLE:
-    TRADER_STRATEGIES = {
-        "Warren": warren_strategy,
-        "Ray": ray_strategy,
-        "Cathie": cathie_strategy
-    }
+# Using strategies package - no fallback needed
 
 def get_trader_client(name: str) -> AlpacaClient:
     """Get or create trader-specific AlpacaClient with strategy injection"""
@@ -314,17 +303,9 @@ async def get_risk_status(name: str) -> RiskStatus:
 async def get_strategy(name: str) -> str:
     """Get investment strategy for a trader using Strategy system"""
     try:
-        if STRATEGY_SYSTEM_AVAILABLE:
-            # Use simple strategy system
-            strategy_obj = create_strategy(name)
-            return strategy_obj.get_instructions()
-        else:
-            # Fallback to old system
-            strategy = TRADER_STRATEGIES.get(name)
-            if strategy:
-                return strategy.strip()
-            else:
-                return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+        # Use strategies package
+        strategy_obj = create_strategy(name)
+        return strategy_obj.get_instructions()
     except Exception as e:
         error_msg = f"❌ Strategy retrieval error: {str(e)}"
         write_log(name, "error", error_msg)
@@ -344,17 +325,9 @@ async def read_trader_resource(name: str) -> str:
 async def read_strategy_resource(name: str) -> str:
     """Get trader investment strategy as resource"""
     try:
-        if STRATEGY_SYSTEM_AVAILABLE:
-            # Use simple strategy system
-            strategy_obj = create_strategy(name)
-            return strategy_obj.get_instructions()
-        else:
-            # Fallback to old system
-            strategy = TRADER_STRATEGIES.get(name)
-            if strategy:
-                return strategy.strip()
-            else:
-                return f"No strategy found for trader {name}. Available traders: {', '.join(TRADER_STRATEGIES.keys())}"
+        # Use strategies package
+        strategy_obj = create_strategy(name)
+        return strategy_obj.get_instructions()
     except Exception as e:
         return f"❌ Error loading strategy for {name}: {str(e)}"
 

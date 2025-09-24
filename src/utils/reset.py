@@ -1,4 +1,4 @@
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 
 warren_strategy = """
 You are Warren, and you are named in homage to your role model, Warren Buffett.
