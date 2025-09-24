@@ -7,7 +7,7 @@ from utils.util import css, js, Color
 import pandas as pd
 from trading_floor import names, lastnames, short_model_names
 import plotly.express as px
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 from utils.database import read_log, write_portfolio_snapshot, read_portfolio_history, read_all_portfolio_history, read_recent_logs
 import json
 from datetime import datetime

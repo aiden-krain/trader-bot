@@ -12,7 +12,7 @@ from trading_agents.templates import (
     trading_session_message,
 )
 from config.mcp_params import trader_mcp_server_params, researcher_mcp_server_params
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 
 load_dotenv(override=True)
 

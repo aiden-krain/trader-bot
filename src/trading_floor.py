@@ -2,7 +2,7 @@ from trading_agents.traders import Trader
 from typing import List
 import asyncio
 from trading_agents.tracers import LogTracer
-from core.alpaca_client import AlpacaClient
+from trading_core.alpaca_client import AlpacaClient
 from dotenv import load_dotenv
 import os
 import json
