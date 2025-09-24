@@ -183,14 +183,14 @@ This shows your funds, limits, current positions, and portfolio status.
         async with AsyncExitStack() as stack:
             trader_mcp_servers = [
                 await stack.enter_async_context(
-                    MCPServerStdio(params, client_session_timeout_seconds=120)
+                    MCPServerStdio(params, client_session_timeout_seconds=300)
                 )
                 for params in trader_mcp_server_params()  # Call function instead of using as variable
             ]
             async with AsyncExitStack() as stack:
                 researcher_mcp_servers = [
                     await stack.enter_async_context(
-                        MCPServerStdio(params, client_session_timeout_seconds=120)
+                        MCPServerStdio(params, client_session_timeout_seconds=300)
                     )
                     for params in researcher_mcp_server_params(self.name)
                 ]
