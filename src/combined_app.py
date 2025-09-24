@@ -433,7 +433,7 @@ enhanced_css = css + """
 """
 
 # Create Gradio interface
-with gr.Blocks(css=enhanced_css, js=js, title="AI Trading Bot Dashboard") as demo:
+with gr.Blocks(css=enhanced_css, js=js, title="AI Trading Bot Dashboard") as trading_bot:
     gr.HTML("<h1 style='text-align: center; color: #2E8B57;'>🤖 AI Trading Bot - Enhanced Dashboard</h1>")
     
     # Trading Bot Status Section
@@ -508,7 +508,7 @@ if __name__ == "__main__":
     print(f"🤖 Trading bot running in background")
     
     # Launch Gradio with public access for Railway
-    demo.launch(
+    trading_bot.launch(
         server_name="0.0.0.0",
         server_port=port,
         share=False,
