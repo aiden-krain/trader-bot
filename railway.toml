@@ -1,41 +1,20 @@
 [build]
-builder = "nixpacks"
+builder = "heroku/python"
 
-[build.nixpacksConfig]
-# Enhanced build process to avoid numpy source directory conflicts
-install = """
-# Clean any existing numpy source files
-rm -rf numpy* || true
-rm -rf /app/numpy* || true
-
-# Install uv package manager
-pip install uv
-
-# Install numpy first in isolation to avoid source conflicts
-uv pip install --system --no-cache-dir numpy==1.26.4
-
-# Verify numpy installation before proceeding
-python -c "import numpy; print(f'Numpy {numpy.__version__} installed successfully')"
-
-# Install pandas separately to ensure clean numpy import
-uv pip install --system --no-cache-dir pandas>=2.0.0
-
-# Install remaining dependencies
-uv pip install --system --no-cache-dir -r requirements.txt
-
-# Final verification
-python -c "import pandas; import numpy; print('All dependencies installed successfully')"
+[build.buildCommand]
+command = """
+# Modern Python buildpack approach - avoids nixpacks numpy issues
+pip install --upgrade pip setuptools wheel
+pip install -r requirements.txt
 """
 
 [deploy]
-startCommand = "cd src && PYTHONPATH=/app/src NUMPY_EXPERIMENTAL_DTYPE_API=0 PYTHONDONTWRITEBYTECODE=1 python combined_app.py"
+startCommand = "cd src && python combined_app.py"
 restartPolicyType = "always"
 restartPolicyMaxRetries = 10
 
 [environments.production]
 variables = { 
-  PYTHONPATH = "/app/src", 
-  NUMPY_EXPERIMENTAL_DTYPE_API = "0", 
-  PYTHONDONTWRITEBYTECODE = "1",
-  PYTHONHASHSEED = "0"
+  PYTHONPATH = "/app/src",
+  PORT = "8080"
 }
