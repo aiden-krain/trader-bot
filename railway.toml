@@ -2,18 +2,40 @@
 builder = "nixpacks"
 
 [build.nixpacksConfig]
-# Use uv for faster, more reliable dependency installation
+# Enhanced build process to avoid numpy source directory conflicts
 install = """
+# Clean any existing numpy source files
+rm -rf numpy* || true
+rm -rf /app/numpy* || true
+
+# Install uv package manager
 pip install uv
-uv pip install --system numpy==1.26.4
-uv pip install --system pandas>=2.0.0
-uv pip install --system -r requirements.txt
+
+# Install numpy first in isolation to avoid source conflicts
+uv pip install --system --no-cache-dir numpy==1.26.4
+
+# Verify numpy installation before proceeding
+python -c "import numpy; print(f'Numpy {numpy.__version__} installed successfully')"
+
+# Install pandas separately to ensure clean numpy import
+uv pip install --system --no-cache-dir pandas>=2.0.0
+
+# Install remaining dependencies
+uv pip install --system --no-cache-dir -r requirements.txt
+
+# Final verification
+python -c "import pandas; import numpy; print('All dependencies installed successfully')"
 """
 
 [deploy]
-startCommand = "cd src && PYTHONPATH=/app/src NUMPY_EXPERIMENTAL_DTYPE_API=0 python combined_app.py"
+startCommand = "cd src && PYTHONPATH=/app/src NUMPY_EXPERIMENTAL_DTYPE_API=0 PYTHONDONTWRITEBYTECODE=1 python combined_app.py"
 restartPolicyType = "always"
 restartPolicyMaxRetries = 10
 
 [environments.production]
-variables = { PYTHONPATH = "/app/src", NUMPY_EXPERIMENTAL_DTYPE_API = "0", PYTHONDONTWRITEBYTECODE = "1" }
+variables = { 
+  PYTHONPATH = "/app/src", 
+  NUMPY_EXPERIMENTAL_DTYPE_API = "0", 
+  PYTHONDONTWRITEBYTECODE = "1",
+  PYTHONHASHSEED = "0"
+}
