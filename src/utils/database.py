@@ -13,7 +13,10 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # Database file for logging and portfolio tracking
-DB = "trading_bot.db"
+import os
+# Get absolute path to the src directory (parent of utils directory)
+src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB = os.path.join(src_dir, "trading_bot.db")
 
 def _init_database():
     """Initialize database with optimized schema"""

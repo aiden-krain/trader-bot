@@ -13,12 +13,15 @@ def trader_mcp_server_params():
     Uses focused server architecture: trading, account, market data, and notifications.
     """
     
+    # Get the src directory path
+    src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
     servers = [
-        # Decomposed server architecture - focused responsibilities
-        {"command": "uv", "args": ["run", "servers/trading_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
-        {"command": "uv", "args": ["run", "servers/account_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
-        {"command": "uv", "args": ["run", "servers/market_data_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
-        {"command": "uv", "args": ["run", "servers/push_server.py"], "env": {"PYTHONPATH": os.getcwd()}},
+        # Decomposed server architecture - focused responsibilities  
+        {"command": "uv", "args": ["run", os.path.join(src_dir, "servers/trading_server.py")], "env": {"PYTHONPATH": src_dir}, "cwd": src_dir},
+        {"command": "uv", "args": ["run", os.path.join(src_dir, "servers/account_server.py")], "env": {"PYTHONPATH": src_dir}, "cwd": src_dir},
+        {"command": "uv", "args": ["run", os.path.join(src_dir, "servers/market_data_server.py")], "env": {"PYTHONPATH": src_dir}, "cwd": src_dir},
+        {"command": "uv", "args": ["run", os.path.join(src_dir, "servers/push_server.py")], "env": {"PYTHONPATH": src_dir}, "cwd": src_dir},
     ]
     
     if os.getenv("BRAVE_API_KEY"):
@@ -37,15 +40,20 @@ def researcher_mcp_server_params(name: str):
     Enhanced researcher MCP parameters with dual search for comprehensive market research.
     Combines Serper (Google), Brave Search, web fetch, and persistent memory.
     """
+    # Get the src directory path for absolute database paths
+    src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    memory_db_path = os.path.join(src_dir, "memory", f"{name}.db")
+    
     servers = [
         # Web content fetching
-        {"command": "uvx", "args": ["mcp-server-fetch"]},
+        {"command": "uvx", "args": ["mcp-server-fetch"], "cwd": src_dir},
         
         # Persistent memory for research continuity
         {
             "command": "npx",
             "args": ["-y", "mcp-memory-libsql"],
-            "env": {"LIBSQL_URL": f"file:./memory/{name}.db"},
+            "env": {"LIBSQL_URL": f"file:{memory_db_path}"},
+            "cwd": src_dir
         },
     ]
     
