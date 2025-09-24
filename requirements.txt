@@ -1,0 +1,25 @@
+# Core AI Providers
+openai>=1.68.2
+anthropic>=0.40.0
+
+# Trading Platform
+alpaca-py>=0.33.0
+
+# MCP & Agents Framework
+mcp>=1.0.0
+openai-agents>=0.0.15
+
+# Core Dependencies
+pydantic>=2.0.0
+python-dotenv>=1.0.1
+requests>=2.32.3
+httpx>=0.28.1
+
+# Dashboard & Monitoring
+gradio>=5.0.0
+plotly>=6.0.1
+
+# Utilities
+psutil>=7.0.0
+setuptools>=78.1.0
+pytz>=2024.1
